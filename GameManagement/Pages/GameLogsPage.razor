@@ -1,0 +1,205 @@
+﻿@page "/gamelogs"
+@inject DbContextOptions<GameDbContext> dbo
+@inject NavigationManager navmgr
+@inject IStringLocalizer<SharedResources> L
+
+<h3>@L["GameLogs"]</h3>
+<br />
+
+<div class="input-group mb-3">
+    <div class="input-group-prepend">
+        <select class="custom-select" @bind="SearchType">
+            <option value="@((int)SearchTypeID.UserName)">@L["UserName"]</option>
+            <option value="@((int)SearchTypeID.UserID)">@L["UserID"]</option>
+            <option value="@((int)SearchTypeID.CharName)">@L["CharName"]</option>
+            <option value="@((int)SearchTypeID.CharID)">@L["CharID"]</option>
+        </select>
+    </div>
+    <input class="form-control" id="search-input-label" type="search" @bind="SearchText" @onkeyup="OnKeyUp">
+    <div class="input-group-append">
+        <button class="btn btn-primary" type="button" @onclick="async e => await Search()">@L["Search"]</button>
+    </div>
+</div>
+
+@if (gameLogs != null)
+{
+    <div class="table-responsive">
+
+        <table class="table table-bordered" style="table-layout: auto">
+            <colgroup>
+                <col span="1" style="width: 100px">
+                <col span="1" style="width: 200px">
+                <col span="1" style="width: 100px">
+                <col span="1" style="width: 100px">
+                <col span="1" style="width: 200px">
+                <col span="1">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>@L["ID"]</th>
+                    <th>@L["Type"]</th>
+                    <th>@L["UserID"]</th>
+                    <th>@L["CharID"]</th>
+                    <th>@L["Time"]</th>
+                    <th>@L["Detail"]</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><input style="width: 100%" @bind="FilterID" @onkeyup="OnKeyUpFilter" class="form-control form-control-sm" placeholder=" FILTER " /></td>
+                    <td>
+                        <select style="width: 100%" value="@FilterType" @onchange="OnChangeType" class="form-control form-control-sm">
+                            <option value=" "> FILTER </option>
+                            @foreach (var t in TableData.gamelogs)
+                            {
+                                @if(t.Key != GameLog.TypeID.None)
+                                {
+                                <option value="@t.Key">@L[t.Value.Name]</option>
+                                }
+                            }
+                        </select>
+                    </td>
+                    <td><input style="width: 100%" @bind="FilterUserID" @onkeyup="OnKeyUpFilter" class="form-control form-control-sm" placeholder=" FILTER " /></td>
+                    <td><input style="width: 100%" @bind="FilterCharID" @onkeyup="OnKeyUpFilter" class="form-control form-control-sm" placeholder=" FILTER " /></td>
+                    <td><input style="width: 100%" @bind="FilterTime" @onkeyup="OnKeyUpFilter" class="form-control form-control-sm" placeholder=" FILTER " /></td>
+                    <td><input style="width: 100%" @bind="FilterDetail" @onkeyup="OnKeyUpFilter" class="form-control form-control-sm" placeholder=" FILTER " /></td>
+                </tr>
+                @foreach (var l in gameLogs)
+                {
+                    <tr style="height:50px;">
+                        <td>@l.id</td>
+                        <td>@L[TableData.gamelogs.GetValue(l.typeid)]</td>
+                        <td>@l.userid</td>
+                        <td>@l.charid</td>
+                        <td>@l.logtime.ToString("yy-MM-dd HH:mm:ss")</td>
+                        <td style="overflow: hidden; text-overflow:ellipsis; white-space:nowrap">@l.detail</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <nav aria-label="Page navigation example">
+            <ul class="pagination justify-content-center">
+                <li class="@(maxPage<=1? "page-item disabled" : "page-item")">
+                    <a class="page-link" href="#" @onclick="e=>OnClickPage(e,curPage)" @onclick:preventDefault>&lt;</a>
+                </li>
+                @for (int p = curPageIndex - (curPageIndex % 10), i = p; i < Math.Min(p + 10, maxPage); i++)
+                {
+                    var vi = i;
+                    <li class=@(vi==curPageIndex? "page-item disabled" : "page-item")>
+                        <a class="page-link" href="#" @onclick="e=>OnClickPage(e,vi+1)" @onclick:preventDefault>@(vi+1)</a>
+                    </li>
+                }
+
+                <li class="@(maxPage<=curPage? "page-item disabled" : "page-item")">
+                    <a class="page-link" href="#" @onclick="e=>OnClickPage(e,curPage)" @onclick:preventDefault>&gt;</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+}
+
+@code {
+    public enum SearchTypeID
+    {
+        UserName = 1,
+        UserID,
+        CharName,
+        CharID,
+    }
+    int SearchType = (int)SearchTypeID.UserName;
+    string SearchText;
+
+    string FilterID;
+    string FilterType;
+    string FilterUserID;
+    string FilterCharID;
+    string FilterTime;
+    string FilterDetail;
+
+    public static int ItemCount = 10;
+    public int maxPage;
+    public int curPage = 1;
+    public int curPageIndex { get { return curPage > 0 ? curPage - 1 : 0; } }
+    List<GameLog> gameLogs = new List<GameLog>();
+
+
+    public async Task OnKeyUp(KeyboardEventArgs e)
+    {
+        if (string.Compare(e.Key, "Enter") == 0)
+        {
+            await Search(0);
+        }
+    }
+
+    public async Task OnKeyUpFilter(KeyboardEventArgs e)
+    {
+        if (string.Compare(e.Key, "Enter") == 0)
+        {
+            await Search(0);
+        }
+    }
+
+    public async Task OnChangeType(ChangeEventArgs e)
+    {
+        FilterType = e.Value.ToString();
+        await Search(0);
+    }
+
+    public async Task OnClickPage(MouseEventArgs e, int page)
+    {
+        if (page < 0)
+            page = 0;
+        await Search(page);
+    }
+
+    async Task Search(int goPage = 1)
+    {
+        gameLogs.Clear();
+        curPage = goPage;
+
+        using (var db = new GameDbContext(dbo))
+        {
+            Int64 TargetUserID = 0;
+            Int64 TargetCharID = 0;
+            switch ((SearchTypeID)SearchType)
+            {
+                case SearchTypeID.UserName: TargetUserID = (await db.game_users.Where(u => u.name == SearchText).FirstOrDefaultAsync())?.id ?? 0; break;
+                case SearchTypeID.UserID: TargetUserID = Int64.Parse(SearchText); break;
+                case SearchTypeID.CharName: TargetCharID = (await db.game_chars.Where(u => u.name == SearchText).FirstOrDefaultAsync())?.id ?? 0; break;
+                case SearchTypeID.CharID: TargetCharID = Int64.Parse(SearchText); break;
+            }
+
+            Int64 FilterID2 = 0;
+            if (!string.IsNullOrEmpty(FilterID))
+                Int64.TryParse(FilterID, out FilterID2);
+            var FilterType2 = GameLog.TypeID.None;
+            if (!string.IsNullOrEmpty(FilterType))
+                Enum.TryParse(FilterType, true, out FilterType2);
+            Int64 FilterUserID2 = 0;
+            if (!string.IsNullOrEmpty(FilterUserID))
+                Int64.TryParse(FilterUserID, out FilterUserID2);
+            Int64 FilterCharID2 = 0;
+            if (!string.IsNullOrEmpty(FilterCharID))
+                Int64.TryParse(FilterCharID, out FilterCharID2);
+            string FilterDetail2 = string.IsNullOrEmpty(FilterDetail) ? null : FilterDetail.ToLower();
+
+            bool filterd = !string.IsNullOrEmpty(FilterID + FilterType + FilterUserID + FilterCharID + FilterTime + FilterDetail);
+            var query = (filterd ? db.game_logs.Where(elm =>
+                   ((TargetUserID > 0) ? (elm.userid == TargetUserID) : (elm.charid == TargetCharID))
+                && (FilterID2 <= 0 || elm.id == FilterID2)
+                && (FilterType2 == GameLog.TypeID.None || elm.typeid == FilterType2)
+                && (FilterUserID2 <= 0 || elm.userid == FilterUserID2)
+                && (FilterCharID2 <= 0 || elm.charid == FilterCharID2)
+                && (string.IsNullOrEmpty(FilterDetail2) || elm.detail.ToLower().Contains(FilterDetail2))
+            ) : db.game_logs);
+
+            var hcount = await query.CountAsync();
+            maxPage = hcount / ItemCount + ((hcount % ItemCount) > 0 ? 1 : 0);
+            if (curPage > maxPage)
+                curPage = 0;
+
+            var curPageItemCount = ItemCount * curPageIndex;
+            gameLogs = await query.Skip(curPageItemCount).Take(ItemCount).ToListAsync();
+        }
+    }
+}

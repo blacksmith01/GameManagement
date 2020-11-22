@@ -1,0 +1,185 @@
+﻿@inject IStringLocalizer<SharedResources> L
+@typeparam TItem
+
+<div class='@($"dropdown {dropDownClassState}")'>
+    @ResultView(async (state) => await ToggleDropDownState(state))
+
+    <div class='@($"dropdown-menu {dropDownClassState}")' role="menu" @onfocusout='OnFocusOutMenu'>
+
+        @if (Multiple)
+        {
+            <div class="dropdown-item" @onclick="OnClickDefault">
+                <div class="custom-control custom-checkbox">
+                    <input class="custom-control-input"
+                           type="checkbox"
+                           value="@checkAll"
+                           checked="@checkAll"
+                           @onchange="e=>OnChangedChecked(-1)"
+                           id='@($"{Key}_radio_id_all")' />
+                    <label class="custom-control-label"
+                           for='@($"{Key}_radio_id_all")'>
+                        @L[$"Select_All"]
+                    </label>
+                </div>
+            </div>
+        }
+
+        @for (int i = 0; i < filterdItems.Count; i++)
+        {
+            var vi = i;
+            var item = filterdItems[vi];
+            var checkState = checkStates[vi];
+            <div class="dropdown-item" @onclick="OnClickDefault">
+                <div class="custom-control custom-checkbox">
+                    <input class="custom-control-input"
+                           type="checkbox"
+                           value="@checkState"
+                           checked="@checkState"
+                           @onchange="e=>OnChangedChecked(vi)"
+                           id='@($"{Key}_radio_id_{vi.ToString()}")' />
+                    <label class="custom-control-label"
+                           for='@($"{Key}_radio_id_{vi.ToString()}")'>
+                        @($"{ItemToID(item)}. {ItemToName(item)}" ?? item.ToString())
+                    </label>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code
+{
+    [Parameter]
+    public string Key { get; set; }
+
+    [Parameter]
+    public RenderFragment<Action<bool>> ResultView { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<TItem> Items { get; set; }
+
+    [Parameter]
+    public IReadOnlyCollection<int> Selected { get; set; }
+
+    [Parameter]
+    public Action<string, IReadOnlyList<int>> OnSelectItem { get; set; }
+
+    [Parameter]
+    public Func<TItem, string> ItemToID { get; set; }
+
+    [Parameter]
+    public Func<TItem, string> ItemToName { get; set; }
+
+    [Parameter]
+    public bool Multiple { get; set; }
+
+    [Inject] IJSRuntime JSRuntime { get; set; }
+
+    bool dropDownState = false;
+    string dropDownClassState = "";
+    long lastActionTime;
+    bool checkAll;
+    List<bool> checkStates;
+    public IReadOnlyList<TItem> filterdItems;
+
+    protected override void OnParametersSet()
+    {
+        filterdItems = Items;
+        checkStates = filterdItems.Select(i => false).ToList();
+        foreach (var i in Selected)
+        {
+            if (i>=0 && i < checkStates.Count)
+                checkStates[i] = true;
+        }
+    }
+
+    async Task OnFocusOutMenu()
+    {
+        var curr_tick = DateTime.Now.Ticks;
+
+        await Task.Delay(200);
+
+        if (Math.Abs(curr_tick - lastActionTime) > 200 * TimeSpan.TicksPerMillisecond)
+        {
+            //Logger.Debug("focusout");
+            await ToggleDropDownState(false);
+        }
+    }
+
+    void OnClickDefault()
+    {
+        lastActionTime = DateTime.Now.Ticks;
+        //Logger.Debug("onclick");
+    }
+    void OnChangedChecked(int idx)
+    {
+        var checkedList = new List<int>();
+        if (idx < 0)
+        {
+            checkAll = !checkAll;
+            for (int i = 0; i < checkStates.Count; i++)
+            {
+                checkStates[i] = checkAll;
+
+                if (checkStates[i])
+                    checkedList.Add(i);
+            }
+        }
+        else
+        {
+            checkStates[idx] = !checkStates[idx];
+            if (Multiple)
+            {
+                if (!checkStates[idx])
+                    checkAll = false;
+
+                for (int i = 0; i < checkStates.Count; i++)
+                {
+                    if (checkStates[i])
+                        checkedList.Add(i);
+                }
+
+                if (checkedList.Count >= checkStates.Count)
+                    checkAll = true;
+            }
+            else
+            {
+                for (int i = 0; i < checkStates.Count; i++)
+                {
+                    if (i != idx)
+                        checkStates[i] = false;
+
+                    if (checkStates[i])
+                        checkedList.Add(i);
+                }
+            }
+        }
+
+        OnSelectItem?.Invoke(Key, checkedList);
+    }
+
+    async Task OnKeyDownItem(KeyboardEventArgs e)
+    {
+        lastActionTime = DateTime.Now.Ticks;
+
+        if (string.Compare(e.Key, "Escape") == 0)
+        {
+            await ToggleDropDownState(false);
+        }
+    }
+
+    public async Task ToggleDropDownState(bool state)
+    {
+        dropDownState = state;
+        dropDownClassState = dropDownState ? "show" : "";
+
+        if (state)
+        {
+            await Task.Delay(100);
+
+            lastActionTime = DateTime.Now.Ticks;
+
+            await JSRuntime.InvokeVoidAsync("customJsFunctions.focusElement", $"{Key}_radio_id_{(Multiple ? "all" : "0")}");
+        }
+    }
+}

@@ -1,0 +1,40 @@
+﻿@inherits LayoutComponentBase
+@inject IHttpContextAccessor http
+@inject NavigationManager nav;
+@inject IOptions<RequestLocalizationOptions> LocOptions
+
+<div class="sidebar">
+    <NavMenu />
+</div>
+
+<div class="main">
+    <div class="top-row px-4 auth">
+        <LoginDisplay />
+        <form action="/Common/setlanguage" method="post">
+            <select name="culture" class="form-control form-control-sm" value="@http.RequestLanguage()" onchange="this.form.submit()">
+                @foreach (var l in LocOptions.GetSupportedLanguages())
+                {
+                    <option value="@l.Item1">@l.Item2</option>
+                }
+            </select>
+            <input name="returnUrl" type="hidden" value="@returnUrl()" />
+        </form>
+    </div>
+
+    <div class="content px-4">
+        @Body
+    </div>
+</div>
+
+@code
+{
+    string returnUrl()
+    {
+        if (string.IsNullOrEmpty(nav.Uri) || nav.Uri == nav.BaseUri)
+        {
+            return "~/";
+        }
+
+        return nav.Uri.Substring(nav.BaseUri.Length-1);
+    }
+}

@@ -1,0 +1,43 @@
+﻿<div aria-live="polite" aria-atomic="true" style="position: relative; min-height: 200px;">
+    <div class="toast" style="position: fixed; top: 90%; left: 50%;"  data-delay="@Delay.ToString()">
+        @if (Title?.Any() ?? false)
+        {
+            <div class="toast-header">
+
+                <strong class="mr-auto">Title</strong>
+                <button type="button" class="ml-2 mb-1 close" data-dismiss="toast" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <div class="toast-body">
+            <span>@Content</span>
+            @if (!(Title?.Any() ?? false))
+            {
+                <button type="button" class="ml-2 mb-1 close" data-dismiss="toast" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            }
+        </div>
+    </div>
+</div>
+
+@code
+{
+    [Parameter]
+    public string Title { get; set; }
+
+    [Parameter]
+    public string Content { get; set; }
+
+    [Parameter]
+    public int Delay { get; set; }
+
+    [Inject] IJSRuntime JSRuntime { get; set; }
+
+    public async Task Show()
+    {
+        await JSRuntime.InvokeVoidAsync("customJsFunctions.showToast");
+    }
+}

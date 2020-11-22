@@ -1,0 +1,207 @@
+﻿@page "/admin/histories"
+@attribute [Authorize(Roles = AppUser.Role.Admin)]
+@inject DbContextOptions<ApplicationDbContext> dbo
+@inject NavigationManager navmgr
+@inject IStringLocalizer<SharedResources> L
+
+<h3>@L["GM Histories"]</h3>
+<br />
+
+<div class="table-responsive">
+
+    <table class="table table-bordered" style="table-layout: fixed; width: 100%">
+        <colgroup>
+            <col span="1" style="width: 100px;">
+            <col span="1" style="width: 150px;">
+            <col span="1" style="width: 150px;">
+            <col span="1" style="width: 200px;">
+            <col span="1" >
+        </colgroup>
+        <thead>
+            <tr>
+                <th>@L["ID"]</th>
+                <th>@L["Name"]</th>
+                <th>@L["Type"]</th>
+                <th>@L["Time"]</th>
+                <th>@L["Detail"]</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><input style="width: 100%" @bind="FilterID" @onkeyup="OnKeyUpFilter" class="form-control form-control-sm" placeholder=" FILTER " /></td>
+                <td><input style="width: 100%" @bind="FilterName" @onkeyup="OnKeyUpFilter" class="form-control form-control-sm" placeholder=" FILTER " /></td>
+                <td>
+                    <select style="width: 100%" value="@FilterType" @onchange="OnChangeType" class="form-control form-control-sm">
+                        <option value=" "> FILTER </option>
+                        @foreach (var t in TableData.gmhistories)
+                        {
+                            @if (t.Key != AppUser.History.Types.None)
+                            {
+                                <option value="@t.Key">@L[t.Value.Name]</option>
+                            }
+                        }
+                    </select>
+                </td>
+                <td><input style="width: 100%" @bind="FilterTime" @onkeyup="OnKeyUpFilter" class="form-control form-control-sm" placeholder=" FILTER " /></td>
+                <td><input style="width: 100%" @bind="FilterDetail" @onkeyup="OnKeyUpFilter" class="form-control form-control-sm" placeholder=" FILTER " /></td>
+            </tr>
+            @foreach (var h in Result)
+            {
+                <tr style="height:50px;">
+                    <td>@h.Data?.ID</td>
+                    <td>@h.Name</td>
+                    <td>@(h.Data==null?"":L[TableData.gmhistories.GetValue(h.Data.TypeID)])</td>
+                    <td>@h.Data?.Time.ToString("yy-MM-dd HH:mm:ss")</td>
+                    <td style="overflow: hidden; text-overflow:ellipsis; white-space:nowrap">@h.Data?.Detail</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <nav aria-label="Page navigation example">
+        <ul class="pagination justify-content-center">
+            <li class="@(maxPage<=1? "page-item disabled" : "page-item")">
+                <a class="page-link" href="#" @onclick="e=>OnClickPage(e,curPage)" @onclick:preventDefault>&lt;</a>
+            </li>
+            @for (int p = curPageIndex - (curPageIndex % 10), i = p; i < Math.Min(p + 10, maxPage); i++)
+            {
+                var vi = i;
+                <li class=@(vi==curPageIndex? "page-item disabled" : "page-item")>
+                    <a class="page-link" href="#" @onclick="async e=> await OnClickPage(e,vi+1)" @onclick:preventDefault>@(vi + 1)</a>
+                </li>
+            }
+            <li class="@(maxPage<=curPage? "page-item disabled" : "page-item")">
+                <a class="page-link" href="#" @onclick="e=>OnClickPage(e,curPage)" @onclick:preventDefault>&gt;</a>
+            </li>
+        </ul>
+    </nav>
+</div>
+
+@code
+{
+    public string FilterID { get; set; }
+    public string FilterName { get; set; }
+    public string FilterType { get; set; }
+    public string FilterTime { get; set; }
+    public string FilterDetail { get; set; }
+    public static int ItemCount = 10;
+    public int maxPage;
+    public int curPage;
+    public int curPageIndex { get { return curPage > 0 ? curPage - 1 : 0; } }
+
+    public class GMHistory
+    {
+        public AppUser.History Data { get; set; }
+        public string Name { get; set; }
+    }
+    public List<GMHistory> Result = new List<GMHistory>();
+
+    protected async override Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        var qs = navmgr.ToAbsoluteUri(navmgr.Uri).Query;
+        var query = QueryHelpers.ParseQuery(qs);
+        if (query.TryGetValue("id", out var param_id))
+        {
+            FilterID = param_id;
+        }
+        if (query.TryGetValue("name", out var param_name))
+        {
+            FilterName = param_name;
+        }
+        if (query.TryGetValue("type", out var param_type))
+        {
+            FilterType = param_type;
+        }
+        if (query.TryGetValue("time", out var param_time))
+        {
+            FilterTime = param_time;
+        }
+        if (query.TryGetValue("detail", out var param_detail))
+        {
+            FilterDetail = param_detail;
+        }
+
+        int goPage = 0;
+        if (query.TryGetValue("page", out var param_page))
+        {
+            goPage = int.Parse(param_page);
+        }
+
+        await Search(goPage);
+    }
+
+    public string GetUrlByPage(int page)
+    {
+        return $"/admin/histories?id={FilterID}&name={FilterName}&type={FilterType}&detail={FilterDetail}&page={page}";
+    }
+
+    public async Task OnClickPage(MouseEventArgs e, int page)
+    {
+        await Search(page);
+    }
+
+    public async Task OnKeyUpFilter(KeyboardEventArgs e)
+    {
+        if (string.Compare(e.Key, "Enter") == 0)
+        {
+            await Search(0);
+        }
+    }
+
+    public async Task OnChangeType(ChangeEventArgs e)
+    {
+        FilterType = e.Value.ToString();
+        await Search(0);
+    }
+
+    async Task Search(int page)
+    {
+        Result.Clear();
+        curPage = page;
+
+        using (var db = new ApplicationDbContext(dbo))
+        {
+            bool filterd = !string.IsNullOrEmpty(FilterID + FilterName + FilterType + FilterTime + FilterDetail);
+
+            Int64 FilterID2 = 0;
+            if (!string.IsNullOrEmpty(FilterID))
+                Int64.TryParse(FilterID, out FilterID2);
+            var FilterType2 = AppUser.History.Types.None;
+            if (!string.IsNullOrEmpty(FilterType))
+                Enum.TryParse(FilterType, true, out FilterType2);
+            string FilterName2 = string.IsNullOrEmpty(FilterName) ? null : FilterName.ToLower();
+            string FilterDetail2 = string.IsNullOrEmpty(FilterDetail) ? null : FilterDetail.ToLower();
+
+            var query = filterd ? db.Histories.Where(elm =>
+                       (FilterID2 <= 0 || elm.ID == FilterID2)
+                    && (string.IsNullOrEmpty(FilterName) || string.IsNullOrEmpty(elm.UserName) || elm.UserName.ToLower().Contains(FilterName2))
+                    && (FilterType2 == AppUser.History.Types.None || elm.TypeID == FilterType2)
+                    && (string.IsNullOrEmpty(FilterDetail) || string.IsNullOrEmpty(elm.Detail) || elm.Detail.ToLower().Contains(FilterDetail2))
+                ): db.Histories;
+
+            var hcount = await query.CountAsync();
+
+            maxPage = hcount / ItemCount + ((hcount % ItemCount) > 0 ? 1 : 0);
+            if (curPage > maxPage)
+                curPage = 0;
+
+            var curPageItemCount = ItemCount * curPageIndex;
+            var templist = await query.OrderByDescending(elm => elm.ID).Skip(curPageItemCount).Take(ItemCount).ToListAsync();
+
+            foreach (var h in templist)
+            {
+                var user = await db.Users.FindAsync(h.UserID);
+                if (user == null)
+                    continue;
+
+                Result.Add(new GMHistory { Data = h, Name = user.UserName });
+            }
+        }
+
+        while (Result.Count < ItemCount)
+            Result.Add(new GMHistory { });
+
+        StateHasChanged();
+    }
+}

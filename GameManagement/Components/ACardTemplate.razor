@@ -1,0 +1,76 @@
+﻿@typeparam TItem
+
+<div id=@("accordion"+HeaderName)>
+    <div class="card">
+        <div class="card-header">
+            <span class="d-flex justify-content-between">
+                <p style="padding: 0px; margin:0px">@HeaderName</p>
+                <span>
+                    <button class="ex-button-icon" data-toggle="collapse" href="@("#collapseBody"+HeaderName)" @onclick="OnClickCollapse" @onclick:preventDefault>
+                        <span class="@($"oi oi-chevron-{(CollapseState?"bottom":"top")}")"></span>
+                    </button>
+                    @if (UseAddButton)
+                    {
+                        <button class="ex-button-icon" @onclick="OnAddItem" @onclick:stopPropagation="true">
+                            <span class="oi oi-plus"></span>
+                        </button>
+                    }
+                </span>
+            </span>
+        </div>
+        <div id="@("collapseBody"+HeaderName)" class=@($"collapse{(CollapseState?"":" show")}") data-parent=@("#accordion"+HeaderName)>
+            <div class="card-body">
+                <div class="list-group">
+
+                    @foreach (var item in Items)
+                    {
+                        var vitem = item;
+                        <a href="#" class="list-group-item list-group-item-action flex-column align-items-start" @onclick="e=> this.OnEditItem.InvokeAsync(vitem)" @onclick:preventDefault>
+                            @BodyRowTemplate(item)
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        margin-bottom: 1em !important;
+    }
+
+    .card-body .list-group .list-group-item {
+        margin-bottom: 10px;
+    }
+</style>
+
+@code
+{
+    [Parameter]
+    public string HeaderName { get; set; }
+
+    [Parameter]
+    public bool UseAddButton { get; set; }
+
+    [Parameter]
+    public bool CollapseState { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<TItem> Items { get; set; }
+
+    [Parameter]
+    public RenderFragment<TItem> BodyRowTemplate { get; set; }
+
+    [Parameter]
+    public EventCallback<TItem> OnEditItem { get; set; }
+
+    [Parameter]
+    public EventCallback OnAddItem { get; set; }
+
+    void OnClickCollapse()
+    {
+        CollapseState = (!CollapseState);
+
+    }
+}

@@ -1,0 +1,135 @@
+﻿@inject IStringLocalizer<SharedResources> L
+
+<EditForm EditContext="@editContext" OnSubmit="OnSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="modal-header">
+        <h1 class="modal-title">@(Notice.id==0? L["Add Notice"]: L["Edit Notice"])</h1>
+    </div>
+    <div class="modal-body">
+
+        <div class="form-row">
+            <div class="form-group col-4">
+                <label for="notice_id">@L["ID"]</label>
+                <InputNumber class="form-control" id="notice_id" @bind-Value="Notice.id" readonly />
+            </div>
+
+            <div class="form-group col-8">
+                <label for="notice_name">@L["Name"]</label>
+                <InputText class="form-control" id="notice_name" @bind-Value="Notice.name" />
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group col-4">
+                <label for="notice_type">@L["Type"]</label>
+                <InputSelect class="form-control" id="notice_type" @bind-Value="Notice.typeid">
+                    @foreach (var p in TableData.notices)
+                    {
+                        <option value="@p.Key">@L[p.Value.Name]</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="form-group col-4">
+                <label for="notice_cycle">@L["Cycle(s)"]</label>
+                <InputNumber class="form-control" id="notice_cycle" @bind-Value="Notice.cycle" />
+            </div>
+
+            <div class="form-group col-4">
+                <label for="notice_duration">@L["Duration(s)"]</label>
+                <InputNumber class="form-control" id="notice_duration" @bind-Value="Notice.duration"></InputNumber>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="notice_servers">@L["Servers"]</label>
+            <DropDownItemSelector Key="1" Multiple="true" TItem="GameServer" Items="Servers.ToList()"
+                                  Selected="Notice.servers?.Split(',').Select(s => Servers.IndexOf(x=>x.id==IntEx.ParseEx(s))).ToArray() ?? new int[] { }"
+                                  OnSelectItem="OnChangeSelectServers" ItemToID="s=>s.id.ToString()" ItemToName="s=>s.name">
+                <ResultView Context="toggleDropDown">
+                    <InputText class="form-control" id="notice_servers" @bind-Value="Notice.servers" @onclick="e=>toggleDropDown(true)" readonly></InputText>
+                </ResultView>
+            </DropDownItemSelector>
+        </div>
+
+        <div class="form-group">
+            <label for="notice_starttime">@L["StartTime"]</label>
+            <input class="form-control" type="datetime-local" id="notice_starttime" value="@Notice.starttime.ToString("yyyy-MM-ddTHH:mm")" @onchange="e=> { Notice.starttime = Convert.ToDateTime(e.Value); }" />
+        </div>
+
+        <div class="form-group">
+            <label for="notice_endtime">@L["EndTime"]</label>
+            <input class="form-control" type="datetime-local" id="notice_endtime" value="@Notice.endtime.ToString("yyyy-MM-ddTHH:mm")" @onchange="e=> { Notice.endtime = Convert.ToDateTime(e.Value); }" />
+        </div>
+
+        <div class="form-group">
+            <label for="notice_message">@L["Message"]</label>
+            <InputTextArea class="form-control" rows="3" id="notice_message" @bind-Value="Notice.message" />
+        </div>
+        <ValidationSummary />
+    </div>
+    <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">@(Notice.id==0? L["Create"]: L["Update"])</button>
+        @if (Notice.id != 0)
+        {
+            <button type="button" class="btn btn-primary" @onclick="OnRemove" data-dismiss="modal">@L["Remove"]</button>
+        }
+        <button type="button" class="btn btn-secondary" @onclick="OnCancel" data-dismiss="modal">@L["Cancel"]</button>
+    </div>
+</EditForm>
+
+<style>
+    #notice_servers:read-only {
+        background-color: #FFF !important;
+    }
+</style>
+
+@code
+{
+    [Parameter]
+    public GameServer.Notice Notice { get; set; }
+
+    [Parameter]
+    public IEnumerable<GameServer> Servers { get; set; }
+
+    [Parameter]
+    public EventCallback OnCreate { get; set; }
+    [Parameter]
+    public EventCallback OnUpdate { get; set; }
+    [Parameter]
+    public EventCallback OnRemove { get; set; }
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    public int[] selected_servers = new int[] { };
+
+    public string cssClass { get; set; }
+    public EditContext editContext;
+
+    protected override void OnParametersSet()
+    {
+        editContext = new EditContext(Notice);
+    }
+
+    public void OnChangeSelectServers(string key, IReadOnlyCollection<int> checkStates)
+    {
+        Notice.servers = string.Join(",", checkStates.Select(s => s.ToString()));
+        editContext.NotifyFieldChanged(editContext.Field("servers"));
+    }
+
+
+    async Task OnSubmit()
+    {
+        if (!editContext.Validate())
+        {
+            return;
+        }
+
+        if (Notice.id == 0)
+            await OnCreate.InvokeAsync(null);
+        else
+            await OnUpdate.InvokeAsync(null);
+
+        editContext = new EditContext(Notice);
+    }
+}

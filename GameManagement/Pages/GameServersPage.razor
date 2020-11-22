@@ -1,0 +1,139 @@
+﻿@page "/gameservers"
+@inject DbContextOptions<GameDbContext> dbo
+@inject IStringLocalizer<SharedResources> L
+
+<h3>@L["Server Informations"]</h3>
+<br />
+
+@if (Result != null)
+{
+    <p>
+        <div class="list-group">
+            <a id="server-a" href="#" class="list-group-item d-flex justify-content-between align-items-center"
+               @onclick:preventDefault>
+                <div class="ex-server-li-1">@L["ID"]</div>
+                <div class="ex-server-li-2">@L["Name"]</div>
+                <div class="ex-server-li-3">@L["State"]</div>
+                <div class="ex-server-li-4">@L["CCU"]</div>
+            </a>
+
+            @foreach (var s in Result)
+            {
+                var id = s.id;
+                <a id="server-a" href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                   @onclick="e=>OnClickServer(id)" @onclick:preventDefault>
+                    <div class="ex-server-li-1">@s.id.ToString()</div>
+                    <div class="ex-server-li-2">@s.name</div>
+                    <div class="ex-server-li-3">@s.state.ToString()</div>
+                    <div class="ex-server-li-4">@s.usercount.ToString()</div>
+                </a>
+            }
+        </div>
+    </p>
+}
+
+@if (Selected != null)
+{
+    <p>
+        <div class="card">
+            <div class="card-header">
+                @Selected.name
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group col">
+                        <label for="ID-label">@L["ID"]</label>
+                        <input class="form-control" id="ID-label" value="@Selected.id.ToString()" readonly />
+                    </div>
+
+                    <div class="form-group col">
+                        <label for="Name-label">@L["Name"]</label>
+                        <input class="form-control" id="Name-label" value="@Selected.name" readonly />
+                    </div>
+
+                    <div class="form-group col">
+                        <label for="type-label">@L["Type"]</label>
+                        <input class="form-control" id="type-label" value="@L[Selected.typeid.ToString()+" Server"]" readonly />
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col">
+                        <label for="State-label">@L["State"]</label>
+                        <input class="form-control" id="State-label" value='@Selected.state.ToString()' readonly />
+                    </div>
+
+                    <div class="form-group col">
+                        <label for="lastUpdate-label">@L["Last Update"]</label>
+                        <input class="form-control" id="lastUpdate-label" value='@Selected.lastupdate.ToString("yy-MM-dd HH:mm:ss")' readonly />
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col">
+                        <label for="CCU-label">@L["CCU"]</label>
+                        <input class="form-control" id="CCU-label" value='@Selected.usercount' readonly />
+                    </div>
+
+                    <div class="form-group col">
+                        <label for="MCU-label">@L["MCU"]</label>
+                        <input class="form-control" id="MCU-label" readonly />
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </p>
+}
+
+<style>
+    .ex-server-li-1 {
+        width: 15%;
+    }
+    .ex-server-li-2 {
+        width: 45%;
+    }
+    .ex-server-li-3 {
+        width: 25%;
+    }
+    .ex-server-li-4 {
+        width: 15%;
+    }
+    #server-a {
+        text-decoration: none
+    }
+
+    .card {
+        margin-bottom: 1em !important
+    }
+</style>
+
+@code {
+
+    List<GameServer> Result;
+    GameServer Selected;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (var db = new GameDbContext(dbo))
+        {
+            Result = await db.game_servers.ToListAsync();
+        }
+    }
+
+    void OnClickServer(int id)
+    {
+        Selected = Result.Where(s => s.id == id).FirstOrDefault();
+    }
+
+    string GetBadgeClassType(GameServer.State state)
+    {
+        switch (state)
+        {
+            case GameServer.State.Unavailable: return "badge badge-dark";
+            case GameServer.State.Active: return "badge badge-success";
+            case GameServer.State.Mainternance: return "badge badge-danger";
+            default: return "";
+        }
+    }
+}

@@ -1,0 +1,23 @@
+﻿@page
+@model RegisterConfirmationModel
+@inject IStringLocalizer<SharedResources> L
+
+<h1>@ViewData["Title"]</h1>
+@{
+    if (@Model.SentEmail)
+    {
+        <p>
+            @L["Please check your email to confirm your account."]
+        </p>
+    }
+    else
+    {
+        <p>
+            @L["Please wait for the admin approval."]
+        </p>
+    }
+}
+
+@{
+    ViewData["Title"] = L["Register confirmation"];
+}

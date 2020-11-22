@@ -1,0 +1,126 @@
+﻿@inject IStringLocalizer<SharedResources> L
+
+
+<EditForm EditContext="@editContext" OnSubmit="OnSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="modal-header">
+        <h1 class="modal-title">@(isUpdateAction ? L["Edit Skill"]: L["Add Skill"])</h1>
+    </div>
+    <div class="modal-body">
+
+        <button type="submit" disabled style="display: none" aria-hidden="true"></button>
+
+        <div class="form-row">
+            <div class="form-group col-4">
+                <label for="skill_id">@L["ID"]</label>
+                <InputNumber class="form-control" id="skill_id" @bind-Value="Skill.id" disabled />
+            </div>
+
+            <div class="form-group col">
+                <label for="skill_name">@L["Name"]</label>
+                <DropDownItemFinder Key="1" Items="@TableData.charitemList" OnSelectItem="OnSelectSkill"
+                            ItemToID="item => item.Id.ToString()" ItemToName="item => L[item.Name]">
+                    <ResultView Context="ctxItemFinder">
+                        <input id="skill_name" class="form-control" type="text" @bind="skillName" @onclick="()=>OnClickItemFinder(ctxItemFinder)" disabled="@isUpdateAction" />
+                    </ResultView>
+                </DropDownItemFinder>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group col">
+                <label for="skill_count">@L["Level"]</label>
+                <InputNumber class="form-control" id="skill_count" @bind-Value="Skill.level" />
+            </div>
+
+            <div class="form-group col">
+                <label for="skill_timelimit">@L["Cooltime(s)"]</label>
+                <InputNumber class="form-control" id="skill_timelimit" @bind-Value="Skill.cooltime" />
+            </div>
+        </div>
+        <ValidationSummary />
+    </div>
+    <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">@(isUpdateAction ? L["Update"]: L["Add"])</button>
+        @if (isUpdateAction)
+        {
+            <button type="button" class="btn btn-primary" @onclick="OnRemove" data-dismiss="modal">@L["Remove"]</button>
+        }
+        <button type="button" class="btn btn-secondary" @onclick="OnCancel" data-dismiss="modal">@L["Cancel"]</button>
+    </div>
+</EditForm>
+
+<style>
+    .list-group {
+        height: 300px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+</style>
+
+@code
+{
+    EditContext editContext;
+    bool isUpdateAction;
+    string skillName;
+
+    [Parameter]
+    public GameChar.Skill Skill { get; set; }
+    [Parameter]
+    public EventCallback OnCreate { get; set; }
+    [Parameter]
+    public EventCallback OnUpdate { get; set; }
+    [Parameter]
+    public EventCallback OnRemove { get; set; }
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        editContext = new EditContext(Skill);
+        isUpdateAction = Skill.id != 0;
+        if (isUpdateAction)
+        {
+            if (!TableData.charskills.TryGetValue(Skill.id, out var gd))
+            {
+                skillName = "UNKNOWN";
+            }
+            else
+            {
+                skillName = L[gd.Name];
+            }
+        }
+    }
+
+    void OnClickItemFinder(Action<bool> showItemFinder)
+    {
+        if (!isUpdateAction)
+        {
+            showItemFinder(true);
+        }
+    }
+
+    void OnSelectSkill(string key, TableData.NameItem selected)
+    {
+        Skill.id = selected.Id;
+        skillName = L[selected.Name];
+
+        StateHasChanged();
+    }
+
+    async Task OnSubmit()
+    {
+        if (!editContext.Validate())
+        {
+            return;
+        }
+
+        if (!isUpdateAction)
+            await OnCreate.InvokeAsync(null);
+        else
+            await OnUpdate.InvokeAsync(null);
+
+        editContext = new EditContext(Skill);
+    }
+}

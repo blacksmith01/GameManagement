@@ -1,0 +1,185 @@
+﻿@page "/bulkactions"
+@using System.Threading
+@using System.Threading.Tasks
+@implements IDisposable
+
+@inject DbContextOptions<GameDbContext> dbo_game
+@inject IStringLocalizer<SharedResources> L
+@inject BulkActionService bulkActionService
+@inject NavigationManager nav
+
+<h3>@L["Bulk Actions"]</h3>
+
+<p>
+    <button type="button" class="btn btn-outline-primary" @onclick='()=>nav.NavigateTo("/bulkactions/mail")'>@L["Send Bulk Emails"]</button>
+    <button type="button" class="btn btn-outline-primary" @onclick="async ()=>await DoTempAction(1)">@L["Temp Bulk Action 1s"]</button>
+    <button type="button" class="btn btn-outline-primary" @onclick="async ()=>await DoTempAction(10)">@L["Temp Bulk Action 10s"]</button>
+    <button type="button" class="btn btn-outline-primary" @onclick="async ()=>await DoTempAction(60)">@L["Temp Bulk Action 60s"]</button>
+</p>
+
+<h3>@L["Ongoing Operations"]</h3>
+<div class="border">
+    <ul id="ongoing_list" class="list-group">
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div class="ex-bulkaction-li-1">@L["ID"]</div>
+            <div class="ex-bulkaction-li-2">@L["Title"]</div>
+            <div class="ex-bulkaction-li-3">@L["RequestTime"]</div>
+            <div class="ex-bulkaction-li-4">@L["Cancel"]</div>
+        </li>
+
+        @foreach (var e in currentActions)
+        {
+            <li id='@($"{GetItemId(e)}")' class='@($"{GetItemCssClass(e)} d-flex justify-content-between align-items-center")'>
+                <div class="ex-bulkaction-li-1">@e.id.ToString()</div>
+                <div class="ex-bulkaction-li-2">@e.title</div>
+                <div class="ex-bulkaction-li-3">@e.requestTime.ToString("yy-MM-dd HH:mm:ss")</div>
+                <div class="ex-bulkaction-li-4">
+                    <input type="button" class="btn btn-info" value=" X " disabled="@e.state.IsFinished()"
+                           @onclick="async ()=> await CancelItem(e)" @onclick:stopPropagation="true" />
+                </div>
+            </li>
+        }
+    </ul>
+</div>
+
+<style>
+
+    .ex-bulkaction-li-1 {
+        width: 15%;
+    }
+
+    .ex-bulkaction-li-2 {
+        width: 45%;
+    }
+
+    .ex-bulkaction-li-3 {
+        width: 25%;
+    }
+
+    .ex-bulkaction-li-4 {
+        width: 15%;
+    }
+
+    .btn-outline-primary {
+        text-align: center !important;
+        width: 200px;
+        height: 200px;
+    }
+
+    #ongoing_list {
+        height: 400px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #running_item {
+        animation: kf_bacground_color_progress 3s infinite;
+    }
+</style>
+
+@code {
+    IReadOnlyCollection<BulkAction> currentActions = new List<BulkAction>();
+    bool isDisposed = false;
+    System.Timers.Timer timer = new System.Timers.Timer(1000);
+
+    protected async override Task OnInitializedAsync()
+    {
+        await ReloadActions();
+
+        timer.Elapsed += async (s, e) => await ReloadActions();
+        timer.AutoReset = false;
+        timer.Start();
+    }
+
+    async Task ReloadActions()
+    {
+        bool updated = false;
+        do
+        {
+            if (!IEnumerableEx.IsNullOrEmpty(currentActions))
+            {
+                var last = currentActions.Last();
+                if (bulkActionService.LastActionID() == last.id && last.state.IsFinished())
+                {
+                    break;
+                }
+            }
+
+            currentActions = await bulkActionService.RetrieveInfomations();
+            updated = true;
+        }
+        while (false);
+
+        await InvokeAsync(() =>
+        {
+            if (!isDisposed)
+            {
+                if (updated)
+                {
+                    StateHasChanged();
+                }
+                timer.Start();
+            }
+        });
+    }
+
+    string GetItemId(BulkAction action)
+    {
+        if (action.state == BulkAction.State.Running)
+        {
+            return "running_item";
+        }
+        else
+        {
+            return "etc_item_" + action.id.ToString();
+        }
+    }
+    string GetItemCssClass(BulkAction action)
+    {
+        if (action.state == BulkAction.State.Complete)
+        {
+            return "list-group-item list-group-item-dark";
+        }
+        else if (action.state == BulkAction.State.Canceled)
+        {
+            return "list-group-item list-group-item-danger";
+        }
+        else
+        {
+            return "list-group-item";
+        }
+    }
+
+    public void Dispose()
+    {
+        timer.Dispose();
+        isDisposed = true;
+    }
+
+    async Task DoTempAction(int reqTime)
+    {
+        await bulkActionService.Add(L[$"Temp Bulk Action {reqTime}s"], (ct) =>
+        {
+
+            var m = new object();
+
+            ct.Register(() =>
+            {
+                lock (m)
+                {
+                    Monitor.Pulse(m);
+                }
+            });
+
+            lock (m)
+            {
+                return Monitor.Wait(m, reqTime * 1000) == false;
+            }
+        });
+    }
+
+    async Task CancelItem(BulkAction action)
+    {
+        await bulkActionService.Cancel(action.id);
+    }
+}

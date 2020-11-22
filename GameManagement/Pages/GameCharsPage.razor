@@ -1,0 +1,359 @@
+﻿@page "/gamechars"
+@inject DbContextOptions<ApplicationDbContext> dbo_app
+@inject DbContextOptions<GameDbContext> dbo_game
+@inject AuthenticationStateProvider asp
+@inject NavigationManager nav
+@inject IStringLocalizer<SharedResources> L
+
+<h3>@L["Character Management"]</h3>
+<br />
+
+<div class="input-group mb-3">
+    <div class="input-group-prepend">
+        <select class="custom-select" @bind="SearchType">
+            <option value="@((int)SearchTypeID.Name)">@L["Name"]</option>
+            <option value="@((int)SearchTypeID.ID)">@L["ID"]</option>
+        </select>
+    </div>
+    <input class="form-control" id="search-input-label" type="search" @bind="SearchText" @onkeyup="e=>OnKeySearch(e)">
+    <div class="input-group-append">
+        <button class="btn btn-primary" type="button" @onclick="()=>RequestSearch()">@L["Search"]</button>
+    </div>
+</div>
+
+@if (Result != null)
+{
+    <div class="row">
+        <div class="col-sm">
+            <div class="card">
+                <div class="card-header">
+                    <span class="d-flex justify-content-between">
+                        <p style="padding: 0px; margin:0px">@L["Base_Information"]</p>
+                        <input type="button" class="btn btn-info" value='@L["Edit"]' @onclick="OnEditBase" @onclick:preventDefault />
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <div class="form-group col-2">
+                            <label for="ID-label">@L["ID"]</label>
+                            <input class="form-control" id="ID-label" value="@Result.Char.id.ToString()" readonly />
+                        </div>
+
+                        <div class="form-group col-2">
+                            <label for="ID-label">@L["UserID"]</label>
+                            <input class="form-control" id="ID-label" value="@Result.Char.userid.ToString()" readonly />
+                        </div>
+
+                        <div class="form-group col">
+                            <label for="Name-label">@L["Name"]</label>
+                            <input class="form-control" id="Name-label" value="@Result.Char.name" readonly />
+                        </div>
+
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col">
+                            <label for="Grade-label">@L["Class"]</label>
+                            <input class="form-control" id="Grade-label" value='@L[($"CharClass_{Result.Char.typeid.ToString()}")]' readonly />
+                        </div>
+
+                        <div class="form-group col">
+                            <label for="Grade-label">@L["Level"]</label>
+                            <input class="form-control" id="Grade-label" value="@Result.Char.level.ToString()" readonly />
+                        </div>
+
+                        <div class="form-group col">
+                            <label for="Grade-label">@L["Exp"]</label>
+                            <input class="form-control" id="Grade-label" value="@Result.Char.exp.ToString()" readonly />
+                        </div>
+
+                        <div class="form-group col">
+                            <label for="Grade-label">@L["Gold"]</label>
+                            <input class="form-control" id="Grade-label" value="@Result.Char.gold.ToString()" readonly />
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col">
+                            <label for="regdate-label">@L["Register Date"]</label>
+                            <input class="form-control" id="regdate-label" value='@Result.Char.regdate.ToString("yy-MM-dd HH:mm:ss")' readonly />
+                        </div>
+
+                        <div class="form-group col">
+                            <label for="Grade-label">@L["PlayTime"]</label>
+                            <input class="form-control" id="Grade-label" value='@($"{(Result.Char.playtime / 3600.0f).ToString("F1")} {L["Hours"]}")' readonly />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-sm">
+            <ACardTemplate HeaderName="@L["Skills"]" TItem="GameChar.Skill" Items="Result.Skills" OnEditItem="OnEditSkill">
+                <BodyRowTemplate>
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">@L.SkillName(context.id)</h5>
+                        <small>@($"Lv {context.level}")</small>
+                    </div>
+                </BodyRowTemplate>
+            </ACardTemplate>
+        </div>
+        <div class="col-sm">
+            <ACardTemplate HeaderName="@L["Items"]" TItem="GameChar.Item" Items="Result.Items" OnEditItem="OnEditItem" OnAddItem="OnAddItem">
+                <BodyRowTemplate>
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">@L.ItemName(context.id)</h5>
+                        <small>@context.count ea</small>
+                    </div>
+                </BodyRowTemplate>
+            </ACardTemplate>
+        </div>
+    </div>
+}
+
+@if (showDialog)
+{
+    <Dialog>
+        <Content>
+            @if (editAssetType == Defines.CharAssetType.Base)
+            {
+                <GameCharBaseEditForm Char="editBase"
+                                       OnCreate="async e=> await CloseDialog(Defines.DialogAction.Create)"
+                                       OnUpdate="async e=> await CloseDialog(Defines.DialogAction.Update)"
+                                       OnRemove="async e=> await CloseDialog(Defines.DialogAction.Remove)"
+                                       OnCancel="async e=> await CloseDialog(Defines.DialogAction.Cancel)" />
+            }
+            else if (editAssetType == Defines.CharAssetType.Skill)
+            {
+                <GameCharSkillEditForm Skill="editSkill"
+                                       OnCreate="async e=> await CloseDialog(Defines.DialogAction.Create)"
+                                       OnUpdate="async e=> await CloseDialog(Defines.DialogAction.Update)"
+                                       OnRemove="async e=> await CloseDialog(Defines.DialogAction.Remove)"
+                                       OnCancel="async e=> await CloseDialog(Defines.DialogAction.Cancel)" />
+            }
+            else if (editAssetType == Defines.CharAssetType.Item)
+            {
+                <GameCharItemEditForm Item="editItem"
+                                      OnCreate="async e=> await CloseDialog(Defines.DialogAction.Create)"
+                                      OnUpdate="async e=> await CloseDialog(Defines.DialogAction.Update)"
+                                      OnRemove="async e=> await CloseDialog(Defines.DialogAction.Remove)"
+                                      OnCancel="async e=> await CloseDialog(Defines.DialogAction.Cancel)" />
+            }
+        </Content>
+    </Dialog>
+}
+
+<Toast @ref="toast" Content="@L[TableData.sysmessages.GetValue(TableData.SysMessegeTypeID.Error_UserBlockState)]" Delay="3000" />
+
+@code
+{
+    Toast toast;
+    public enum SearchTypeID
+    {
+        Name = 1,
+        ID = 2,
+    }
+    int SearchType = (int)SearchTypeID.Name;
+    string SearchText;
+
+    public class ResultData
+    {
+        public GameChar Char { get; set; }
+        public List<GameChar.Skill> Skills { get; set; }
+        public List<GameChar.Item> Items { get; set; }
+    }
+    ResultData Result { get; set; }
+
+    static readonly GameChar.Item defaultItem = new GameChar.Item();
+
+    GameChar editBase = new GameChar();
+    GameChar.Skill editSkill = new GameChar.Skill();
+    GameChar.Item editItem = new GameChar.Item();
+
+    bool showDialog;
+    Defines.CharAssetType editAssetType;
+
+    protected async override Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        var qs = nav.ToAbsoluteUri(nav.Uri).Query;
+        var query = QueryHelpers.ParseQuery(qs);
+        if (query.TryGetValue("id", out var param_id))
+        {
+            SearchType = (int)SearchTypeID.ID;
+            SearchText = param_id;
+            await Search();
+        }
+        else if (query.TryGetValue("name", out var param_name))
+        {
+            SearchType = (int)SearchTypeID.Name;
+            SearchText = param_name;
+            await Search();
+        }
+    }
+
+    void OnKeySearch(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            RequestSearch();
+        }
+    }
+    void RequestSearch()
+    {
+        nav.NavigateTo($"/gamechars?{(SearchType == (int)SearchTypeID.Name ? "name" : "id")}={SearchText}", true);
+    }
+
+    private async Task Search()
+    {
+        using (var db = new GameDbContext(dbo_game))
+        {
+            GameChar ch = null;
+            if (SearchType == (int)SearchTypeID.Name)
+            {
+                ch = await db.game_chars.Where(u => u.name.Equals(SearchText, StringComparison.OrdinalIgnoreCase)).FirstOrDefaultAsync();
+            }
+            else
+            {
+                int.TryParse(SearchText, out var searchID);
+                ch = await db.game_chars.Where(u => u.id == searchID).FirstOrDefaultAsync();
+            }
+
+            if (ch == null)
+                return;
+
+            Result = new ResultData
+            {
+                Char = ch,
+                Skills = await db.game_charskills.Where(u => u.charid == ch.id).ToListAsync(),
+                Items = await db.game_charitems.Where(u => u.charid == ch.id).ToListAsync(),
+            };
+        }
+    }
+
+    async Task<bool> CheckBlockState()
+    {
+        bool valid_state = false;
+
+        using (var db = new GameDbContext(dbo_game))
+        {
+            valid_state = db.game_users.Where(u => u.id == Result.Char.userid).FirstOrDefault()?.isblocked ?? false;
+        }
+        if (!valid_state)
+        {
+            await toast.Show();
+            return false;
+        }
+
+        return valid_state;
+    }
+
+    async Task OnEditBase()
+    {
+        if (!(await CheckBlockState()))
+            return;
+
+        DataMapping.Copy(Result.Char, editBase);
+        OpenDialog(Defines.CharAssetType.Base);
+    }
+
+    async Task OnEditSkill(GameChar.Skill elm)
+    {
+        if (!(await CheckBlockState()))
+            return;
+
+        DataMapping.Copy(elm, editSkill);
+        OpenDialog(Defines.CharAssetType.Skill);
+    }
+
+    async Task OnAddItem()
+    {
+        if (!(await CheckBlockState()))
+            return;
+
+        DataMapping.Copy(defaultItem, editItem);
+        editItem.charid = Result.Char.id;
+        OpenDialog(Defines.CharAssetType.Skill);
+    }
+
+    async Task OnEditItem(GameChar.Item elm)
+    {
+        if (!(await CheckBlockState()))
+            return;
+
+        DataMapping.Copy(elm, editItem);
+        OpenDialog(Defines.CharAssetType.Item);
+    }
+
+    void OpenDialog(Defines.CharAssetType assetType)
+    {
+        editAssetType = assetType;
+        showDialog = true;
+    }
+
+    async Task CloseDialog(Defines.DialogAction action)
+    {
+        if (action != Defines.DialogAction.Cancel && (await CheckBlockState()))
+        {
+            using (var db = new GameDbContext(dbo_game))
+            {
+                if (action == Defines.DialogAction.Remove)
+                {
+                    switch (editAssetType)
+                    {
+                        case Defines.CharAssetType.Skill: db.game_charskills.Remove(editSkill); break;
+                        case Defines.CharAssetType.Item: db.game_charitems.Remove(editItem); break;
+                    }
+                }
+                else
+                {
+                    if (action == Defines.DialogAction.Create)
+                    {
+                        switch (editAssetType)
+                        {
+                            case Defines.CharAssetType.Skill: await db.game_charskills.AddAsync(editSkill); break;
+                            case Defines.CharAssetType.Item: await db.game_charitems.AddAsync(editItem); break;
+                        }
+                    }
+                    else
+                    {
+                        switch (editAssetType)
+                        {
+                            case Defines.CharAssetType.Base: db.game_chars.Update(editBase); break;
+                            case Defines.CharAssetType.Skill: db.game_charskills.Update(editSkill); break;
+                            case Defines.CharAssetType.Item: db.game_charitems.Update(editItem); break;
+                        }
+                    }
+                }
+
+                await db.SaveChangesAsync();
+            }
+
+            AppUser.History.Types historyType = TableData.GetHistoryType(editAssetType, action);
+            if (historyType != AppUser.History.Types.None)
+            {
+                string historyDetail = "";
+                switch (editAssetType)
+                {
+                    case Defines.CharAssetType.Base: historyDetail = JsonConvert.SerializeObject(editBase); break;
+                    case Defines.CharAssetType.Skill: historyDetail = JsonConvert.SerializeObject(editSkill); break;
+                    case Defines.CharAssetType.Item: historyDetail = JsonConvert.SerializeObject(editItem); break;
+                }
+
+                var user = await asp.CurrentUser();
+                using (var db = new ApplicationDbContext(dbo_app))
+                {
+                    await db.AddHistory(user.GetID(), user.Identity.Name, historyType, JsonConvert.SerializeObject(historyDetail));
+                    var result = await db.SaveChangesAsync();
+                }
+            }
+
+            RequestSearch();
+        }
+
+        showDialog = false;
+        StateHasChanged();
+    }
+}

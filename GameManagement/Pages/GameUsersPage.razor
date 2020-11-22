@@ -1,0 +1,428 @@
+﻿@page "/gameusers"
+@inject DbContextOptions<ApplicationDbContext> dbo_app
+@inject DbContextOptions<GameDbContext> dbo_game
+@inject AuthenticationStateProvider asp
+@inject NavigationManager nav
+@inject IStringLocalizer<SharedResources> L
+
+<h3>@L["User Management"]</h3>
+<br />
+
+<div class="input-group mb-3">
+    <div class="input-group-prepend">
+        <select class="custom-select" @bind="searchType">
+            <option value="1">@L["Name"]</option>
+            <option value="2">@L["ID"]</option>
+        </select>
+    </div>
+    <input class="form-control" type="search" @bind="searchText" @onkeyup="e=>OnKeySearch(e)">
+    <div class="input-group-append">
+        <button class="btn btn-primary" type="button" @onclick="()=>RequestSearch()">@L["Search"]</button>
+    </div>
+</div>
+
+@if (Result != null)
+{
+    <div class="row">
+
+        <div class="col-sm">
+            <div class="card">
+                <div class="card-header">
+                    @L["Base_Information"]
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <div class="form-group col">
+                            <label for="user_id">@L["ID"]</label>
+                            <input class="form-control" id="user_id" value="@Result.id.ToString()" readonly />
+                        </div>
+
+                        <div class="form-group col">
+                            <label for="user_name">@L["Name"]</label>
+                            <input class="form-control" id="user_name" value="@Result.name" readonly />
+                        </div>
+
+                        <div class="form-group col">
+                            <label for="user_grade">@L["Grade"]</label>
+                            <input class="form-control" id="user_grade" value="@Result.grade.ToString()" readonly />
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col">
+                            <label for="user_blackstate">@L["BlockState"]</label>
+                            <input class="form-control" id="user_blackstate" value="@(L[$"BlockState_{Result.isblocked.ToString()}"])" readonly />
+                        </div>
+                        <div class="form-group col">
+                            <label for="user_loginseq">@L["LoginSeq"]</label>
+                            <input class="form-control" id="user_loginseq" value="@Result.loginseq" readonly />
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col">
+                            <label for="user_regdate">@L["Register Date"]</label>
+                            <input class="form-control" id="user_regdate" value='@Result.regdate.ToString("yy-MM-dd HH:mm:ss")' readonly />
+                        </div>
+
+                        <div class="form-group col">
+                            <label for="user_lastlogin">@L["Last Login date"]</label>
+                            <input class="form-control" id="user_lastlogin" value='@Result.lastlogin.ToString("yy-MM-dd HH:mm:ss")' readonly />
+                        </div>
+
+                        <div class="form-group col">
+                            <label for="user_lastlogout">@L["Last Logout Date"]</label>
+                            <input class="form-control" id="user_lastlogout" value='@Result.lastlogout.ToString("yy-MM-dd HH:mm:ss")' readonly />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-sm-6">
+            <ACardTemplate HeaderName="@L["Blocks"]" UseAddButton="true" TItem="GameUser.Block" Items="Result.Blocks" CollapseState="true"
+                           OnAddItem="OnAddBlock" OnEditItem="OnEditBlock">
+                <BodyRowTemplate>
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">@($"{context.id.ToString()}. {context.typeid.ToString()} Block")</h5>
+                    </div>
+                    <p class="mb-1">@context.comment</p>
+                    <small>@($"{context.starttime.ToString("yy-MM-dd HH:mm:ss")} ~ {context.endtime.ToString("yy-MM-dd HH:mm:ss")}")</small>
+                </BodyRowTemplate>
+            </ACardTemplate>
+
+            <ACardTemplate HeaderName="@L["Mails"]" UseAddButton="true" TItem="GameUser.Mail" Items="Result.Mails" CollapseState="true"
+                           OnAddItem="OnAddMail" OnEditItem="OnEditMail">
+                <BodyRowTemplate>
+                    <p class="mb-1" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">@($"{context.id.ToString()}. {context.title}")</p>
+                    <p class="mb-1" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">@context.message</p>
+                    <small>@($"{context.sentdate.ToString("yy-MM-dd HH:mm:ss")}")</small>
+                </BodyRowTemplate>
+            </ACardTemplate>
+        </div>
+        <div class="col-sm-3">
+            <ACardTemplate HeaderName="@L["Goods"]" UseAddButton="true" TItem="GameUser.Goods" Items="Result.Goodses"
+                           OnAddItem="OnAddGoods" OnEditItem="OnEditGoods">
+                <BodyRowTemplate>
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">@L.GoodsName(context.id)</h5>
+                        <small>@context.count ea</small>
+                    </div>
+                    @if (context.timelimit > 0)
+                    {
+                        <small>@($"{(context.timelimit/60.0f).ToString("F1")} Hours Limited")</small>
+                    }
+                </BodyRowTemplate>
+            </ACardTemplate>
+        </div>
+        <div class="col-sm-3">
+            <ACardTemplate HeaderName="@L["Characters"]" UseAddButton="false" TItem="GameChar" Items="Result.Chars"
+                           OnEditItem="(item)=> OnClickChar(item.id)">
+                <BodyRowTemplate>
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">@context.name</h5>
+                        <small>@($"{(context.playtime / 3600.0f).ToString("F1")} Hours")</small>
+                    </div>
+                    <p class="mb-1">Lv.@context.level @context.typeid.ToString()</p>
+                </BodyRowTemplate>
+            </ACardTemplate>
+        </div>
+    </div>
+}
+
+@if (showDialog)
+{
+    <div></div>
+    <Dialog>
+        <Content>
+            @if (editAssetType == Defines.UserAssetType.Block)
+            {
+                <GameUserBlockEditForm Block="editBlock"
+                                       OnCreate="async e=> await CloseDialog(Defines.DialogAction.Create)"
+                                       OnUpdate="async e=> await CloseDialog(Defines.DialogAction.Update)"
+                                       OnRemove="async e=> await CloseDialog(Defines.DialogAction.Remove)"
+                                       OnCancel="async e=> await CloseDialog(Defines.DialogAction.Cancel)" />
+            }
+            else if (editAssetType == Defines.UserAssetType.Mail)
+            {
+                <GameUserMailEditForm Mail="editMail"
+                                      OnCreate="async e=> await CloseDialog(Defines.DialogAction.Create)"
+                                      OnUpdate="async e=> await CloseDialog(Defines.DialogAction.Update)"
+                                      OnRemove="async e=> await CloseDialog(Defines.DialogAction.Remove)"
+                                      OnCancel="async e=> await CloseDialog(Defines.DialogAction.Cancel)" />
+            }
+            else if (editAssetType == Defines.UserAssetType.Goods)
+            {
+                <GameUserGoodsEditForm Goods="editGoods"
+                                       OnCreate="async e=> await CloseDialog(Defines.DialogAction.Create)"
+                                       OnUpdate="async e=> await CloseDialog(Defines.DialogAction.Update)"
+                                       OnRemove="async e=> await CloseDialog(Defines.DialogAction.Remove)"
+                                       OnCancel="async e=> await CloseDialog(Defines.DialogAction.Cancel)" />
+            }
+        </Content>
+    </Dialog>
+}
+
+<Toast @ref="toast" Content="@L[TableData.sysmessages.GetValue(TableData.SysMessegeTypeID.Error_UserBlockState)]" Delay="3000" />
+
+@code
+{
+    Toast toast;
+    enum SearchTypeID
+    {
+        Name = 1,
+        ID = 2,
+    }
+    int searchType = (int)SearchTypeID.Name;
+    string searchText;
+
+    GameUser Result { get; set; }
+
+    static readonly GameUser.Mail defaultMail = new GameUser.Mail();
+    static readonly GameUser.Block defaultBlock = new GameUser.Block();
+    static readonly GameUser.Goods defaultGoods = new GameUser.Goods();
+
+    GameUser.Mail editMail = new GameUser.Mail();
+    GameUser.Block editBlock = new GameUser.Block();
+    GameUser.Goods editGoods = new GameUser.Goods();
+
+    bool showDialog;
+    Defines.UserAssetType editAssetType;
+
+    protected async override Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        var qs = nav.ToAbsoluteUri(nav.Uri).Query;
+        var query = QueryHelpers.ParseQuery(qs);
+        if (query.TryGetValue("id", out var param_id))
+        {
+            searchType = (int)SearchTypeID.ID;
+            searchText = param_id;
+            await Search();
+        }
+        else if (query.TryGetValue("name", out var param_name))
+        {
+            searchType = (int)SearchTypeID.Name;
+            searchText = param_name;
+            await Search();
+        }
+    }
+
+    void OnKeySearch(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            RequestSearch();
+        }
+    }
+    void RequestSearch()
+    {
+        nav.NavigateTo($"/gameusers?{(searchType == (int)SearchTypeID.Name ? "name" : "id")}={searchText}", true);
+    }
+
+    private async Task Search()
+    {
+        if (searchText == null || searchText.Length == 0)
+        {
+            return;
+        }
+
+        using (var db = new GameDbContext(dbo_game))
+        {
+            IQueryable<GameUser> query;
+            if (searchType == (int)SearchTypeID.Name)
+            {
+                query = db.game_users.Where(u => u.name.Equals(searchText, StringComparison.OrdinalIgnoreCase));
+            }
+            else
+            {
+                int.TryParse(searchText, out var searchID);
+                query = db.game_users.Where(u => u.id == searchID);
+            }
+            Result = await query.Include(x => x.Goodses)
+                .Include(x => x.Blocks)
+                .Include(x => x.Mails)
+                .Include(x => x.Chars)
+                .FirstOrDefaultAsync();
+        }
+        StateHasChanged();
+    }
+
+    void OnClickChar(Int64 charid)
+    {
+        nav.NavigateTo($"/gamechars?id={charid}");
+    }
+
+    async Task<bool> CheckBlockState()
+    {
+        bool valid_state = false;
+
+        if (editAssetType == Defines.UserAssetType.Block)
+        {
+            valid_state = true;
+        }
+        else
+        {
+            using (var db = new GameDbContext(dbo_game))
+            {
+                valid_state = db.game_users.Where(u => u.id == Result.id).FirstOrDefault()?.isblocked ?? false;
+            }
+            if (!valid_state)
+            {
+                await toast.Show();
+                return false;
+            }
+        }
+
+        return valid_state;
+    }
+
+    void OnAddBlock()
+    {
+        DataMapping.Copy(defaultBlock, editBlock);
+        editBlock.userid = Result.id;
+        editBlock.starttime = DateTime.Now.RoundToHour();
+        editBlock.endtime = DateTime.Today.AddDays(1);
+        OpenDialog(Defines.UserAssetType.Block);
+    }
+
+    void OnEditBlock(GameUser.Block elm)
+    {
+        DataMapping.Copy(elm, editBlock);
+        OpenDialog(Defines.UserAssetType.Block);
+    }
+
+    void OnAddMail()
+    {
+        DataMapping.Copy(defaultMail, editMail);
+        editMail.userid = Result.id;
+        OpenDialog(Defines.UserAssetType.Mail);
+    }
+
+    void OnEditMail(GameUser.Mail elm)
+    {
+        DataMapping.Copy(elm, editMail);
+        OpenDialog(Defines.UserAssetType.Mail);
+    }
+
+    async Task OnAddGoods()
+    {
+        if (!(await CheckBlockState()))
+            return;
+
+        DataMapping.Copy(defaultGoods, editGoods);
+        editGoods.userid = Result.id;
+        OpenDialog(Defines.UserAssetType.Goods);
+    }
+    async Task OnEditGoods(GameUser.Goods elm)
+    {
+        if (!(await CheckBlockState()))
+            return;
+
+        DataMapping.Copy(elm, editGoods);
+        OpenDialog(Defines.UserAssetType.Goods);
+    }
+
+    void OpenDialog(Defines.UserAssetType assetType)
+    {
+        editAssetType = assetType;
+        showDialog = true;
+    }
+
+    async Task CloseDialog(Defines.DialogAction action)
+    {
+        if (action != Defines.DialogAction.Cancel && (await CheckBlockState()))
+        {
+            using (var db = new GameDbContext(dbo_game))
+            {
+                switch (editAssetType)
+                {
+                    case Defines.UserAssetType.Block:
+                        {
+                            switch (action)
+                            {
+                                case Defines.DialogAction.Create: db.game_userblocks.Add(editBlock); break;
+                                case Defines.DialogAction.Remove: db.game_userblocks.Remove(editBlock); break;
+                                case Defines.DialogAction.Update: db.game_userblocks.Update(editBlock); break;
+                            }
+                        }
+                        break;
+                    case Defines.UserAssetType.Mail:
+                        {
+                            switch (action)
+                            {
+                                case Defines.DialogAction.Create: db.game_mails.Add(editMail); break;
+                                case Defines.DialogAction.Remove: db.game_mails.Remove(editMail); break;
+                                case Defines.DialogAction.Update: db.game_mails.Update(editMail); break;
+                            }
+                        }
+                        break;
+                    case Defines.UserAssetType.Goods:
+                        {
+                            switch (action)
+                            {
+                                case Defines.DialogAction.Create: db.game_useritems.Add(editGoods); break;
+                                case Defines.DialogAction.Remove: db.game_useritems.Remove(editGoods); break;
+                                case Defines.DialogAction.Update: db.game_useritems.Update(editGoods); break;
+                            }
+                        }
+                        break;
+                }
+                await db.SaveChangesAsync();
+
+                switch (editAssetType)
+                {
+                    case Defines.UserAssetType.Block:
+                        {
+                            switch (action)
+                            {
+                                case Defines.DialogAction.Create: db.agent_events.Add(AgentEvent.Create(AgentEvent.TypeID.BlockCreate, editBlock.id)); break;
+                                case Defines.DialogAction.Remove: db.agent_events.Add(AgentEvent.Create(AgentEvent.TypeID.BlockRemove, editBlock.id)); break;
+                                case Defines.DialogAction.Update: db.agent_events.Add(AgentEvent.Create(AgentEvent.TypeID.BlockUpdate, editBlock.id)); break;
+                            }
+                        }
+                        break;
+                    case Defines.UserAssetType.Mail:
+                        {
+                            switch (action)
+                            {
+                                case Defines.DialogAction.Create: db.agent_events.Add(AgentEvent.Create(AgentEvent.TypeID.MailCreate, editMail.id)); break;
+                                case Defines.DialogAction.Remove: db.agent_events.Add(AgentEvent.Create(AgentEvent.TypeID.MailRemove, editMail.id)); break;
+                                case Defines.DialogAction.Update: db.agent_events.Add(AgentEvent.Create(AgentEvent.TypeID.MailUpdate, editMail.id)); break;
+                            }
+                        }
+                        break;
+                }
+
+                await db.SaveChangesAsync();
+            }
+
+            AppUser.History.Types historyType = TableData.GetHistoryType(editAssetType, action);
+            if (historyType != AppUser.History.Types.None)
+            {
+                string historyDetail = "";
+                switch (editAssetType)
+                {
+                    case Defines.UserAssetType.Block: historyDetail = JsonConvert.SerializeObject(editBlock); break;
+                    case Defines.UserAssetType.Mail: historyDetail = JsonConvert.SerializeObject(editMail); break;
+                    case Defines.UserAssetType.Goods: historyDetail = JsonConvert.SerializeObject(editGoods); break;
+                }
+
+                var user = await asp.CurrentUser();
+                using (var db = new ApplicationDbContext(dbo_app))
+                {
+                    await db.AddHistory(user.GetID(), user.Identity.Name, historyType, JsonConvert.SerializeObject(historyDetail));
+                    var result = await db.SaveChangesAsync();
+                }
+            }
+
+            RequestSearch();
+        }
+
+        showDialog = false;
+        StateHasChanged();
+    }
+}

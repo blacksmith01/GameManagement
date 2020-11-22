@@ -1,0 +1,88 @@
+﻿@inject IStringLocalizer<SharedResources> L
+
+<EditForm EditContext="@editContext" OnSubmit="OnSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="modal-header">
+        <h1 class="modal-title">@(isUpdateAction ? L["Edit Char"]: L["Add Char"])</h1>
+    </div>
+    <div class="modal-body">
+
+        <div class="form-group">
+            <label for="char_id">@L["ID"]</label>
+            <InputNumber class="form-control" id="char_id" @bind-Value="Char.id" readonly />
+        </div>
+
+        <div class="form-group">
+            <label for="char_name">@L["Name"]</label>
+            <InputText class="form-control" id="char_name" @bind-Value="Char.name" />
+        </div>
+
+        <div class="form-group">
+            <label for="char_type">@L["Type"]</label>
+            <InputText class="form-control" id="char_type" @bind-Value="className" readonly />
+        </div>
+
+        <div class="form-group">
+            <label for="char_exp">@L["Exp"]</label>
+            <InputNumber class="form-control" type="datetime-local" id="char_exp" @bind-Value="Char.exp" />
+        </div>
+
+        <div class="form-group">
+            <label for="char_gold">@L["Gold"]</label>
+            <InputNumber class="form-control" type="datetime-local" id="char_gold" @bind-Value="Char.gold" />
+        </div>
+
+        <ValidationSummary />
+    </div>
+    <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">@(isUpdateAction ? L["Update"] : L["Add"])</button>
+        @if (isUpdateAction)
+        {
+            <button type="button" class="btn btn-primary" @onclick="OnRemove" data-dismiss="modal">@L["Remove"]</button>
+        }
+        <button type="button" class="btn btn-secondary" @onclick="OnCancel" data-dismiss="modal">@L["Cancel"]</button>
+    </div>
+</EditForm>
+
+@code
+{
+    [Parameter]
+    public GameChar Char { get; set; }
+
+    [Parameter]
+    public EventCallback OnCreate { get; set; }
+    [Parameter]
+    public EventCallback OnUpdate { get; set; }
+    [Parameter]
+    public EventCallback OnRemove { get; set; }
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    bool isUpdateAction;
+    string className;
+    public EditContext editContext;
+
+
+    protected override void OnParametersSet()
+    {
+        editContext = new EditContext(Char);
+        className = L.CharClassName(Char.typeid);
+        isUpdateAction = Char.id != 0;
+    }
+
+    async Task OnSubmit()
+    {
+        if (!editContext.Validate())
+        {
+            return;
+        }
+
+        if (isUpdateAction)
+            await OnUpdate.InvokeAsync(null);
+        else
+            await OnCreate.InvokeAsync(null);
+
+        editContext = new EditContext(Char);
+    }
+}

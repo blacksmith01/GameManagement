@@ -1,0 +1,154 @@
+﻿@page "/statistics"
+
+@using ChartJs.Blazor
+@using ChartJs.Blazor.LineChart
+@using ChartJs.Blazor.Common
+@using ChartJs.Blazor.Common.Axes
+@using ChartJs.Blazor.Common.Enums
+@using ChartJs.Blazor.Util
+@using System.Drawing
+
+@inject DbContextOptions<ApplicationDbContext> dbo_app
+@inject IStringLocalizer<SharedResources> L
+
+<h3>@L["Statistics"]</h3>
+
+<select class="custom-select" @bind="BindSelected">
+    <option value="1">NRU</option>
+    <option value="2">DAU</option>
+    <option value="3">CCU</option>
+    <option value="4">PU</option>
+    <option value="5">NPU</option>
+</select>
+
+<Chart Config="_config" @ref="_chart"></Chart>
+
+@code {
+    int selected = 1;
+    int BindSelected {
+        get { return selected; }
+        set { selected = value; OnChange(); }
+    }
+    private LineConfig _config;
+    Chart _chart;
+
+    IReadOnlyCollection<StatData.Daily> stats;
+
+    protected async override Task OnInitializedAsync()
+    {
+        _config = new LineConfig
+        {
+            Options = new LineOptions
+            {
+                Responsive = true,
+                Title = new OptionsTitle
+                {
+                    Display = false,
+                    Text = ""
+                },
+                Tooltips = new Tooltips
+                {
+                    Mode = InteractionMode.Nearest,
+                    Intersect = true
+                },
+                Hover = new Hover
+                {
+                    Mode = InteractionMode.Nearest,
+                    Intersect = true
+                },
+                Scales = new Scales
+                {
+                    XAxes = new List<CartesianAxis>
+{
+                        new CategoryAxis
+                        {
+                            ScaleLabel = new ScaleLabel
+                            {
+                                LabelString = "Day"
+                            }
+                        }
+                    },
+                    YAxes = new List<CartesianAxis>
+{
+                        new LinearCartesianAxis
+                        {
+                            ScaleLabel = new ScaleLabel
+                            {
+                                LabelString = "Value"
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        stats = await LoadDailyStats(5);
+        _config.Data.Labels.AddRange(stats.Select(x=>x.date.ToString("yy-MM-dd")));
+
+        OnChange();
+    }
+
+    async Task<IReadOnlyCollection<StatData.Daily>> LoadDailyStats(int count)
+    {
+        using(var db = new ApplicationDbContext(dbo_app))
+        {
+            return await db.DailyStats.Take(count).ToListAsync();
+        }
+    }
+
+    void OnChange()
+    {
+        _config.Data.Datasets.Clear();
+
+        if(selected==1)
+        {
+            _config.Data.Datasets.Add(new LineDataset<int>(stats.Select(x => x.NRU))
+            {
+                Label = "NRU",
+                BackgroundColor = ColorUtil.FromDrawingColor(Color.FromArgb(255, 99, 132)),
+                BorderColor = ColorUtil.FromDrawingColor(Color.FromArgb(255, 99, 132)),
+                Fill = FillingMode.Disabled
+            });
+        }
+        else if (selected == 2)
+        {
+            _config.Data.Datasets.Add(new LineDataset<int>(stats.Select(x => x.AU))
+            {
+                Label = "AU",
+                BackgroundColor = ColorUtil.FromDrawingColor(Color.FromArgb(255, 159, 64)),
+                BorderColor = ColorUtil.FromDrawingColor(Color.FromArgb(255, 159, 64)),
+                Fill = FillingMode.Disabled
+            });
+        }
+        else if (selected == 3)
+        {
+            _config.Data.Datasets.Add(new LineDataset<int>(stats.Select(x => x.CCU))
+            {
+                Label = "CCU",
+                BackgroundColor = ColorUtil.FromDrawingColor(Color.FromArgb(255, 205, 86)),
+                BorderColor = ColorUtil.FromDrawingColor(Color.FromArgb(255, 205, 86)),
+                Fill = FillingMode.Disabled
+            });
+        }
+        else if (selected == 4)
+        {
+            _config.Data.Datasets.Add(new LineDataset<int>(stats.Select(x => x.PU))
+            {
+                Label = "PU",
+                BackgroundColor = ColorUtil.FromDrawingColor(Color.FromArgb(75, 192, 192)),
+                BorderColor = ColorUtil.FromDrawingColor(Color.FromArgb(75, 192, 192)),
+                Fill = FillingMode.Disabled
+            });
+        }
+        else if (selected == 5)
+        {
+            _config.Data.Datasets.Add(new LineDataset<int>(stats.Select(x => x.NPU))
+            {
+                Label = "NPU",
+                BackgroundColor = ColorUtil.FromDrawingColor(Color.FromArgb(54, 162, 235)),
+                BorderColor = ColorUtil.FromDrawingColor(Color.FromArgb(54, 162, 235)),
+                Fill = FillingMode.Disabled
+            });
+        }
+    }
+}

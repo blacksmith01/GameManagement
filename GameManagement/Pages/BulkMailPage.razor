@@ -1,0 +1,297 @@
+﻿@page "/bulkactions/mail"
+
+@inject IStringLocalizer<SharedResources> L
+@inject DbContextOptions<GameDbContext> dbo_game
+@inject NavigationManager nav
+@inject BulkActionService bulkActionService
+@inject AppUserHistoryWriter hwriter
+
+<h3>@L["Send Bulk Emails"]</h3>
+<br />
+
+<EditForm Model="model" OnSubmit="OnSubmit">
+    <FluentValidator />
+
+    <div class="card">
+        <div class="card-header">
+            @L["Targets"]
+        </div>
+        <div class="card-body">
+            <div class="custom-control custom-radio">
+                <input type="radio" class="custom-control-input" id="radio_1" name="radio-stacked" checked="@(model.IsTargetAll==true)" @onclick="ToggleTargetType">
+                <label class="custom-control-label" for="radio_1">@L["To All Users"]</label>
+            </div>
+            <div class="custom-control custom-radio">
+                <input type="radio" class="custom-control-input" id="radio_2" name="radio-stacked" checked="@(model.IsTargetAll==false)" @onclick="ToggleTargetType">
+                <label class="custom-control-label" for="radio_2">@L["To Specific Users"]</label>
+            </div>
+        </div>
+    </div>
+    <br />
+    @if (!model.IsTargetAll)
+    {
+        <div class="card">
+            <div class="card-header">
+                @L["Select Targets"]
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <div class="input-group mb-3">
+                        <div class="input-group-prepend">
+                            <select class="input-group-sm custom-select" @bind="targetType">
+                                <option value="1">@L["Name"]</option>
+                                <option value="2">@L["ID"]</option>
+                            </select>
+                        </div>
+                        <InputTextArea class="form-control" rows="3" @bind-Value="model.TargetQuery" />
+                        <div class="input-group-append">
+                            <button class="btn btn-primary" type="button" @onclick="SearchUsers">@L["Search"]</button>
+                        </div>
+                    </div>
+                    <ValidationMessage For="() => model.TargetQuery" />
+                </div>
+
+                <div class="border">
+                    <ul id="user_list" class="list-group">
+                        @foreach (var u in model.Users)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                @($"{u.Key.ToString()}. {u.Value}")
+                                <span>
+                                    <input type="button" class="btn btn-info" value=" X " href="#" @onclick="e=>RemoveUser(u.Key)" @onclick:preventDefault />
+                                </span>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <br />
+    }
+
+    <div class="card">
+        <div class="card-header">
+            @L["Mail"]
+        </div>
+        <div class="card-body">
+
+            <div class="form-group">
+                <label for="mail_type">@L["Type"]</label>
+                <InputSelect class="form-control" id="mail_type" @bind-Value="model.Mail.typeid">
+                    @foreach (var td in TableData.mails)
+                    {
+                        if (td.Key != GameUser.Mail.TypeID.None)
+                        {
+                            <option value="@td.Key">@L[td.Value.Name]</option>
+                        }
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => model.Mail.typeid" />
+            </div>
+
+            <div class="form-group">
+                <label for="mail_title">@L["Title"]</label>
+                <InputText class="form-control" id="mail_title" @bind-Value="model.Mail.title" />
+                <ValidationMessage For="() => model.Mail.title" />
+            </div>
+
+            <div class="form-group">
+                <label for="mail_comment">@L["Content"]</label>
+                <InputTextArea class="form-control" row="3" id="mail_comment" @bind-Value="model.Mail.message" />
+                <ValidationMessage For="() => model.Mail.message" />
+            </div>
+
+            <hr />
+            <div class="d-flex justify-content-between">
+                <label>@L["Mail_Attached_Item"]</label>
+                <span>
+                    <button class="btn btn-info" @onclick="e => ChangeAttatchedItemCount(1)" @onclick:preventDefault>+</button>
+                    <button class="btn btn-info" @onclick="e => ChangeAttatchedItemCount(-1)" @onclick:preventDefault>-</button>
+                </span>
+            </div>
+            <br />
+
+            @for (int i = 0; i < attached_count; i++)
+            {
+                var vi = i;
+                var info = attachedGoods[vi];
+
+                <div id='@($"goods_collapse_{vi.ToString()}")' class='@($"collapse{(info.uiopend?" show":"")}")'>
+                    <div class="form-row">
+                        <div class="form-group col-2">
+                            <label for='@($"goods_id_{vi.ToString()}")'>@L["AttachedItem_ID"]</label>
+                            <InputNumber class="form-control" id='@($"goods_id_{vi.ToString()}")' @bind-Value="info.id" disabled />
+                        </div>
+
+                        <div class="form-group col">
+                            <label for='@($"goods_name_{vi.ToString()}")'>@L["AttachedItem_Name"]</label>
+                            <DropDownItemFinder Key="@vi.ToString()" Items="@TableData.goodsList" OnSelectItem="OnSelectGoods"
+                                                ItemToID="item => item.Id.ToString()" ItemToName="item => L[item.Name]">
+                                <ResultView Context="ctxItemFinder">
+                                    <input id='@($"goods_name_{vi.ToString()}")' class="form-control" type="text" @bind="info.name" @onclick="()=>OnClickItemFinder(ctxItemFinder)" />
+                                </ResultView>
+                            </DropDownItemFinder>
+                        </div>
+
+                        <div class="form-group col-2">
+                            <label for='@($"goods_count_{vi.ToString()}")'>@L["Count"]</label>
+                            <InputNumber class="form-control" id='@($"goods_count_{vi.ToString()}")' ValueExpression="()=>info.count" @onchange="e=>OnChangeItemCount(e,vi)" />
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <hr />
+    <div class="row">
+        <button type="submit" class="btn btn-primary">@L["Add"]</button>
+        <button type="button" class="btn btn-secondary" @onclick="OnCancel">@L["Cancel"]</button>
+    </div>
+</EditForm>
+
+<style>
+
+    #user_list {
+        height: 150px;
+    }
+</style>
+
+@code {
+    enum TargetTypeID
+    {
+        Name = 1,
+        ID = 2,
+    }
+    int targetType = (int)TargetTypeID.Name;
+
+    class GuiModelGoods
+    {
+        public int id;
+        public string name;
+        public int count;
+        public bool uiopend;
+    }
+    GuiModelGoods[] attachedGoods = Enumerable.Range(0, GameUser.Mail.MaxItemCount).Select(n => new GuiModelGoods()).ToArray();
+    int attached_count;
+
+    ModelBulkMail model = new ModelBulkMail();
+    void ChangeAttatchedItemCount(int diff)
+    {
+        if (diff > 0)
+        {
+            if (attached_count + diff >= GameUser.Mail.MaxItemCount)
+                return;
+        }
+        else
+        {
+            if (attached_count + diff < 0)
+                return;
+        }
+
+        for (int i = 0; i < GameUser.Mail.MaxItemCount; i++)
+        {
+            var info = attachedGoods[i];
+            if (i + 1 <= (attached_count + diff))
+            {
+                info.uiopend = true;
+            }
+            else
+            {
+                info.id = default;
+                info.name = default;
+                info.count = default;
+                info.uiopend = false;
+            }
+        }
+
+        attached_count += diff;
+        StateHasChanged();
+    }
+
+    void OnClickItemFinder(Action<bool> showItemFinder)
+    {
+        showItemFinder(true);
+    }
+
+    void OnSelectGoods(string key, TableData.NameItem selected)
+    {
+        var idx = int.Parse(key);
+
+        model.Mail.attached[idx].id = selected.Id;
+        attachedGoods[idx].id = selected.Id;
+        attachedGoods[idx].name = L[selected.Name];
+
+        StateHasChanged();
+    }
+
+    void OnChangeItemCount(ChangeEventArgs e, int idx)
+    {
+        attachedGoods[idx].count = (int)e.Value;
+        model.Mail.attached[idx].cnt = attachedGoods[idx].count;
+    }
+
+    void ToggleTargetType()
+    {
+        model.IsTargetAll = (!model.IsTargetAll);
+    }
+
+    void RemoveUser(Int64 userid)
+    {
+        model.Users.Remove(userid);
+    }
+
+    private async Task SearchUsers()
+    {
+        model.Users?.Clear();
+
+        if (string.IsNullOrEmpty(model.TargetQuery))
+        {
+            StateHasChanged();
+            return;
+        }
+
+        var searchList = model.TargetQuery.SplitAllEmptyEntries();
+
+        using (var db = new GameDbContext(dbo_game))
+        {
+            IQueryable<GameUser> query;
+            if (targetType == (int)TargetTypeID.Name)
+            {
+                query = db.game_users.Where(u => searchList.Contains(u.name));
+            }
+            else
+            {
+                var searchIDList = searchList.Select(t => Int64Ex.ParseEx(t)).ToList();
+                query = db.game_users.Where(u => searchIDList.Contains(u.id));
+            }
+
+            model.Users = await query.ToDictionaryAsync(u => u.id, u => u.name);
+        }
+
+        StateHasChanged();
+    }
+
+    async Task OnSubmit(EditContext editContext)
+    {
+        if (!editContext.Validate())
+        {
+            return;
+        }
+
+        var action = new SendMailRequest() { mail = new GameUser.Mail() };
+        action.dbo_game = dbo_game;
+        DataMapping.Copy(model.Mail, action.mail);
+        action.targetUsers = model.Users.Keys.ToList();
+
+        await bulkActionService.Add($"SendMail ({(model.IsTargetAll ? "All" : action.targetUsers.Count.ToString())})", action.Action);
+        await hwriter.Write(AppUser.History.Types.BulkMail, new { isAll = model.IsTargetAll, targetList = action.targetUsers, mail = action.mail });
+
+        nav.NavigateTo("/bulkactions");
+    }
+
+    void OnCancel()
+    {
+        nav.NavigateTo("/bulkactions");
+    }
+}

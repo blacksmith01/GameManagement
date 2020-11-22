@@ -1,0 +1,120 @@
+﻿@page "/admin/system_settings"
+@attribute [Authorize(Roles = AppUser.Role.Admin)]
+@inject DbContextOptions<ApplicationDbContext> dbo
+@inject AuthenticationStateProvider asp
+@inject IStringLocalizer<SharedResources> L
+@inject AppUserHistoryWriter historyWriter
+
+<h3>@L["System Settings"]</h3>
+<br />
+
+@if (Config == null)
+{
+    <h4>@L["Loading..."]</h4>
+}
+else
+{
+    <EditForm Model="Config" style="max-width:600px" OnSubmit="OnSubmit">
+        <FluentValidator />
+        <div class="card">
+            <div class="card-header">
+                @L["General"]
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="using-label">@L["Using Email Confirmation"]</label>
+                    <div class="col-sm-1">
+                        <InputCheckbox class="form-control checkbox-inline" id="using-label" @bind-Value="Config.UsingEmailConfirm" />
+                        <ValidationMessage For="() => Config.UsingEmailConfirm" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (Config.UsingEmailConfirm)
+        {
+            <div class="card">
+                <div class="card-header">
+                    @L["E-Mail Server"]
+                </div>
+                <div class="card-body">
+
+                    <div class="form-group">
+                        <label for="host-label">@L["Host"]</label>
+                        <InputText class="form-control" id="host-label" @bind-Value="Config.Email.Host" />
+                        <ValidationMessage For="() => Config.Email.Host" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="port-label">@L["Port"]</label>
+                        <InputNumber class="form-control" id="port-label" @bind-Value="Config.Email.Port" />
+                        <ValidationMessage For="() => Config.Email.Port" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ssl-label">@L["EnableSSL"]</label>
+                        <div class="col-sm-1">
+                            <InputCheckbox class="form-control checkbox-inline" id="ssl-label" @bind-Value="Config.Email.EnableSSL" />
+                            <ValidationMessage For="() => Config.Email.EnableSSL" />
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="username-label">@L["UserName"]</label>
+                        <InputText class="form-control" id="username-label" @bind-Value="Config.Email.UserName" />
+                        <ValidationMessage For="() => Config.Email.UserName" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password-label">@L["Password"]</label>
+                        <InputText type="password" class="form-control" id="password-label" @bind-Value="Config.Email.Password" />
+                        <ValidationMessage For="() => Config.Email.Password" />
+                    </div>
+                </div>
+            </div>
+        }
+        <br />
+
+        <br />
+        <button type="submit" class="btn btn-info">Save</button>
+
+    </EditForm>
+}
+
+<Toast @ref="toast" Content="@L["Information Updated."]" Delay="3000" />
+
+@code
+{
+    Toast toast;
+    private DBConfig.System Config;
+
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+
+        using (var ctx = new ApplicationDbContext(dbo))
+        {
+            var c = ctx.System.FirstOrDefault();
+            Config = c;
+        }
+    }
+
+    public async Task OnSubmit(EditContext editContext)
+    {
+        if (!editContext.Validate())
+        {
+            return;
+        }
+
+        using (var ctx = new ApplicationDbContext(dbo))
+        {
+            ctx.System.Update(Config);
+            var user = await asp.CurrentUser();
+            await historyWriter.Write(ctx, user, AppUser.History.Types.EditConfig, Config);
+            await ctx.SaveChangesAsync();
+        }
+
+        await toast.Show();
+    }
+}

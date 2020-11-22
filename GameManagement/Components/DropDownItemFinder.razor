@@ -1,0 +1,159 @@
+﻿@inject IStringLocalizer<SharedResources> L
+@typeparam TItem
+
+<div class='@($"dropdown {dropDownClassState}")'>
+    @ResultView(async (state) => await ToggleDropDownState(state))
+
+    <div class='@($"dropdown-menu {dropDownClassState}")' role="menu" @onfocusout='OnFocusOutMenu'>
+        <div class="input-group w-100">
+            <div class="input-group-prepend">
+                <select class="custom-select" @bind="currFilterOption" @onclick="OnClickDefault">
+                    @for (int i = 0; i < filterOptions.Length; i++)
+                    {
+                        <option value="@i.ToString()"> @filterOptions[i].ToString() </option>
+                    }
+                </select>
+            </div>
+            <input id='@($"{Key}_input_filter_id")' class="form-control" type="search" @bind="filterText" @oninput="OnInputFilter" @onkeydown="OnKeyDownFilter" @onclick="OnClickDefault" @onclick:preventDefault />
+        </div>
+        @for (int i = 0; i < filterdItems.Count; i++)
+        {
+            var item = filterdItems[i];
+            <a id='@($"{Key}_dropdown_item_id_{i.ToString()}")' href="#" class="dropdown-item" @onclick="() => OnClickItem(item)" @onkeydown="OnKeyDownItem" @onclick:preventDefault>
+                @($"{ItemToID(item)}. {ItemToName(item)}" ?? item.ToString())
+            </a>
+        }
+    </div>
+</div>
+
+<style>
+
+    .dropdown-menu a:focus {
+        color: rgb(9, 123, 250);
+    }
+</style>
+
+@code
+{
+    [Parameter]
+    public string Key { get; set; }
+
+    [Parameter]
+    public RenderFragment<Action<bool>> ResultView { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<TItem> Items { get; set; }
+
+    [Parameter]
+    public Action<string, TItem> OnSelectItem { get; set; }
+
+    [Parameter]
+    public Func<TItem, string> ItemToID { get; set; }
+
+    [Parameter]
+    public Func<TItem, string> ItemToName { get; set; }
+
+    [Inject] IJSRuntime JSRuntime { get; set; }
+
+    bool dropDownState = false;
+    string dropDownClassState = "";
+    long lastActionTime;
+
+    string[] filterOptions;
+    public IReadOnlyList<TItem> filterdItems;
+    string filterText;
+    int currFilterOption;
+
+    protected override void OnParametersSet()
+    {
+        filterdItems = Items;
+        filterOptions = new string[] { L["Name"], L["ID"] };
+    }
+
+    async Task OnFocusOutMenu()
+    {
+        var curr_tick = DateTime.Now.Ticks;
+
+        await Task.Delay(200);
+
+        if (Math.Abs(curr_tick - lastActionTime) > 200 * TimeSpan.TicksPerMillisecond)
+        {
+            await ToggleDropDownState(false);
+        }
+    }
+
+    void OnClickDefault()
+    {
+        lastActionTime = DateTime.Now.Ticks;
+    }
+
+    void OnInputFilter(ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString();
+
+        if (text == null || text.Length == 0)
+        {
+            filterdItems = Items;
+        }
+        else if (currFilterOption == 0)
+        {
+            filterdItems = Items.Where(gd => L[ItemToName(gd)].ToString().StartsWith(text)).ToList();
+        }
+        else
+        {
+            filterdItems = Items.Where(gd => ItemToID(gd).ToString().StartsWith(text)).ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    async Task OnKeyDownFilter(KeyboardEventArgs e)
+    {
+        lastActionTime = DateTime.Now.Ticks;
+
+        if (string.Compare(e.Key, "ArrowDown") == 0 && (filterdItems?.Count > 0))
+        {
+            await JSRuntime.InvokeVoidAsync("customJsFunctions.focusElement", $"{Key}_dropdown_item_id_0");
+        }
+        else if (string.Compare(e.Key, "Escape") == 0)
+        {
+            await ToggleDropDownState(false);
+        }
+    }
+
+    async Task OnClickItem(TItem item)
+    {
+        OnSelectItem?.Invoke(Key, item);
+
+        await ToggleDropDownState(false);
+    }
+
+    async Task OnKeyDownItem(KeyboardEventArgs e)
+    {
+        lastActionTime = DateTime.Now.Ticks;
+
+        if (string.Compare(e.Key, "Escape") == 0)
+        {
+            await ToggleDropDownState(false);
+        }
+    }
+
+    public async Task ToggleDropDownState(bool state)
+    {
+        if (state)
+        {
+            filterText = null;
+        }
+        dropDownState = state;
+        dropDownClassState = dropDownState ? "show" : "";
+
+        if (state)
+        {
+            await Task.Delay(100);
+
+            lastActionTime = DateTime.Now.Ticks;
+
+            await JSRuntime.InvokeVoidAsync("customJsFunctions.focusElement", $"{Key}_input_filter_id");
+        }
+    }
+}

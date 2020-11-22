@@ -1,0 +1,209 @@
+﻿@inject IStringLocalizer<SharedResources> L
+
+<EditForm Model="Mail" OnSubmit="OnSubmit">
+    <FluentValidator />
+
+    <div class="modal-header">
+        <h1 class="modal-title">@(isUpdateAction ? L["Edit Mail"]: L["Add Mail"])</h1>
+    </div>
+    <div class="modal-body">
+
+        <div class="form-row">
+            <div class="form-group col-4">
+                <label for="mail_id">@L["ID"]</label>
+                <InputNumber class="form-control" id="mail_id" @bind-Value="Mail.id" readonly />
+            </div>
+
+            <div class="form-group col">
+                <label for="mail_type">@L["Type"]</label>
+                <InputSelect class="form-control" id="mail_type" @bind-Value="Mail.typeid">
+                    @foreach (var td in TableData.mails)
+                    {
+                        if (td.Key != GameUser.Mail.TypeID.None)
+                        {
+                            <option value="@td.Key">@L[td.Value.Name]</option>
+                        }
+                    }
+                </InputSelect>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="mail_title">@L["Title"]</label>
+            <InputText class="form-control" id="mail_title" @bind-Value="Mail.title" />
+        </div>
+
+        <div class="form-group">
+            <label for="mail_comment">@L["Content"]</label>
+            <InputTextArea class="form-control" row="3" id="mail_comment" @bind-Value="Mail.message" />
+        </div>
+
+        <hr />
+        <div class="d-flex justify-content-between">
+            <label>@L["Mail_Attached_Item"]</label>
+            <span>
+                <button class="btn btn-info" @onclick="e => ChangeAttatchedItemCount(1)" @onclick:preventDefault>+</button>
+                <button class="btn btn-info" @onclick="e => ChangeAttatchedItemCount(-1)" @onclick:preventDefault>-</button>
+            </span>
+        </div>
+        <br />
+
+        @for (int i = 0; i < MaxItemCount; i++)
+        {
+            var vi = i;
+            var info = itemInfos[vi];
+
+            <div id='@($"goods_collapse_{vi.ToString()}")' class='@($"collapse{(info.uiopend?" show":"")}")'>
+                <div class="form-row">
+                    <div class="form-group col-2">
+                        <label for='@($"goods_id_{vi.ToString()}")'>@L["AttachedItem_ID"]</label>
+                        <InputNumber class="form-control" id='@($"goods_id_{vi.ToString()}")' @bind-Value="info.id" disabled />
+                    </div>
+
+                    <div class="form-group col">
+                        <label for='@($"goods_name_{vi.ToString()}")'>@L["AttachedItem_Name"]</label>
+                        <DropDownItemFinder Key="@vi.ToString()" Items="@TableData.goodsList" OnSelectItem="OnSelectGoods"
+                                    ItemToID="item => item.Id.ToString()" ItemToName="item => L[item.Name]">
+                            <ResultView Context="ctxItemFinder">
+                                <input id='@($"goods_name_{vi.ToString()}")' class="form-control" type="text" @bind="info.name" @onclick="()=>OnClickItemFinder(ctxItemFinder)" disabled="@isUpdateAction" />
+                            </ResultView>
+                        </DropDownItemFinder>
+                    </div>
+
+                    <div class="form-group col-2">
+                        <label for='@($"goods_count_{vi.ToString()}")'>@L["Count"]</label>
+                        <InputNumber class="form-control" id='@($"goods_count_{vi.ToString()}")' ValueExpression="()=>info.count" @onchange="e=>OnChangeItemCount(e,vi)" />
+                    </div>
+                </div>
+            </div>
+        }
+
+        <ValidationSummary />
+    </div>
+    <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">@(isUpdateAction ? L["Update"]: L["Add"])</button>
+        @if (!isUpdateAction)
+        {
+            <button type="button" class="btn btn-primary" @onclick="OnRemove" data-dismiss="modal">@L["Remove"]</button>
+        }
+        <button type="button" class="btn btn-secondary" @onclick="OnCancel" data-dismiss="modal">@L["Cancel"]</button>
+    </div>
+</EditForm>
+
+@code
+{
+    public const int MaxItemCount = 5;
+
+    class ItemInfo
+    {
+        public int id;
+        public string name;
+        public int count;
+        public bool uiopend;
+    }
+    ItemInfo[] itemInfos = new ItemInfo[MaxItemCount];
+    int attached_count;
+    bool isUpdateAction;
+
+    [Parameter]
+    public GameUser.Mail Mail { get; set; }
+
+    [Parameter]
+    public EventCallback OnCreate { get; set; }
+    [Parameter]
+    public EventCallback OnUpdate { get; set; }
+    [Parameter]
+    public EventCallback OnRemove { get; set; }
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        isUpdateAction = Mail.id != 0;
+        for (int i = 0; i < MaxItemCount; i++)
+        {
+            itemInfos[i] = new ItemInfo();
+            if (isUpdateAction)
+            {
+                itemInfos[i].id = Mail.attached[i].id;
+                if (TableData.goods.TryGetValue(itemInfos[i].id, out var gd))
+                {
+                    itemInfos[i].name = gd.Name;
+                }
+            }
+        }
+    }
+
+    void ChangeAttatchedItemCount(int diff)
+    {
+        if (diff > 0)
+        {
+            if (attached_count + diff >= MaxItemCount)
+                return;
+        }
+        else
+        {
+            if (attached_count + diff < 0)
+                return;
+        }
+
+        for (int i = 0; i < MaxItemCount; i++)
+        {
+            var info = itemInfos[i];
+            if (i + 1 <= (attached_count+ diff))
+            {
+                info.uiopend = true;
+            }
+            else
+            {
+                info.id = default;
+                info.name = default;
+                info.count = default;
+                info.uiopend = false;
+            }
+        }
+
+        attached_count += diff;
+        StateHasChanged();
+    }
+
+    void OnClickItemFinder(Action<bool> showItemFinder)
+    {
+        if (!isUpdateAction)
+        {
+            showItemFinder(true);
+        }
+    }
+
+    void OnSelectGoods(string key, TableData.NameItem selected)
+    {
+        var idx = int.Parse(key);
+
+        Mail.attached[idx].id = selected.Id;
+        itemInfos[idx].id = selected.Id;
+        itemInfos[idx].name = L[selected.Name];
+
+        StateHasChanged();
+    }
+
+    void OnChangeItemCount(ChangeEventArgs e, int idx)
+    {
+        itemInfos[idx].count = (int)e.Value;
+        Mail.attached[idx].cnt = itemInfos[idx].count;
+    }
+
+    async Task OnSubmit(EditContext editContext)
+    {
+        if (!editContext.Validate())
+        {
+            return;
+        }
+
+        if (isUpdateAction)
+            await OnUpdate.InvokeAsync(null);
+        else
+            await OnCreate.InvokeAsync(null);
+
+        editContext = new EditContext(Mail);
+    }
+}

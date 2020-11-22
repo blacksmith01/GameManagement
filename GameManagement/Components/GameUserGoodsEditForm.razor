@@ -1,0 +1,126 @@
+﻿@inject IStringLocalizer<SharedResources> L
+
+
+<EditForm EditContext="@editContext" OnSubmit="OnSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="modal-header">
+        <h1 class="modal-title">@(isUpdateAction ? L["Edit Goods"]: L["Add Goods"])</h1>
+    </div>
+    <div class="modal-body">
+
+        <button type="submit" disabled style="display: none" aria-hidden="true"></button>
+
+        <div class="form-row">
+            <div class="form-group col-4">
+                <label for="goods_id">@L["ID"]</label>
+                <InputNumber class="form-control" id="goods_id" @bind-Value="Goods.id" disabled/>
+            </div>
+
+            <div class="form-group col">
+                <label for="goods_name">@L["Name"]</label>
+                <DropDownItemFinder Key="1" Items="@TableData.goodsList" OnSelectItem="OnSelectGoods"
+                            ItemToID="item => item.Id.ToString()" ItemToName="item => L[item.Name]">
+                    <ResultView Context="ctxItemFinder">
+                        <input id="goods_name" class="form-control" type="text" @bind="goodsName" @onclick="()=>OnClickItemFinder(ctxItemFinder)" disabled="@isUpdateAction" />
+                    </ResultView>
+                </DropDownItemFinder>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group col">
+                <label for="goods_count">@L["Count"]</label>
+                <InputNumber class="form-control" id="goods_count" @bind-Value="Goods.count" />
+            </div>
+
+            <div class="form-group col">
+                <label for="goods_timelimit">@L["TimeLimit"]</label>
+                <InputNumber class="form-control" id="goods_timelimit" @bind-Value="Goods.timelimit" />
+            </div>
+        </div>
+        <ValidationSummary />
+    </div>
+    <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">@(isUpdateAction ? L["Update"]: L["Add"])</button>
+        @if (isUpdateAction)
+        {
+            <button type="button" class="btn btn-primary" @onclick="OnRemove" data-dismiss="modal">@L["Remove"]</button>
+        }
+        <button type="button" class="btn btn-secondary" @onclick="OnCancel" data-dismiss="modal">@L["Cancel"]</button>
+    </div>
+</EditForm>
+
+<style>
+    .list-group {
+        height: 300px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+</style>
+
+@code
+{
+    EditContext editContext;
+    bool isUpdateAction;
+    string goodsName;
+
+    [Parameter]
+    public GameUser.Goods Goods { get; set; }
+    [Parameter]
+    public EventCallback OnCreate { get; set; }
+    [Parameter]
+    public EventCallback OnUpdate { get; set; }
+    [Parameter]
+    public EventCallback OnRemove { get; set; }
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        editContext = new EditContext(Goods);
+        isUpdateAction = Goods.id != 0;
+        if (isUpdateAction)
+        {
+            if (!TableData.goods.TryGetValue(Goods.id, out var gd))
+            {
+                goodsName = "UNKNOWN";
+            }
+            else
+            {
+                goodsName = L[gd.Name];
+            }
+        }
+    }
+
+    void OnClickItemFinder(Action<bool> showItemFinder)
+    {
+        if (!isUpdateAction)
+        {
+            showItemFinder(true);
+        }
+    }
+
+    void OnSelectGoods(string key, TableData.NameItem selected)
+    {
+        Goods.id = selected.Id;
+        goodsName = L[selected.Name];
+
+        StateHasChanged();
+    }
+
+    async Task OnSubmit()
+    {
+        if (!editContext.Validate())
+        {
+            return;
+        }
+
+        if (!isUpdateAction)
+            await OnCreate.InvokeAsync(null);
+        else
+            await OnUpdate.InvokeAsync(null);
+
+        editContext = new EditContext(Goods);
+    }
+}

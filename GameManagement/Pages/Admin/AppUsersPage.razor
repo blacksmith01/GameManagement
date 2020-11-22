@@ -1,0 +1,238 @@
+﻿@page "/admin/appusers"
+@attribute [Authorize(Roles = AppUser.Role.Admin)]
+@inject DbContextOptions<ApplicationDbContext> dbo
+@inject NavigationManager NavigationManager
+@inject IStringLocalizer<SharedResources> L
+
+<h3>@L["GM Management"]</h3>
+<br />
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>@L["Name"]</th>
+            <th>@L["Email"]</th>
+            <th>@L["Role"]</th>
+            <th>@L["RegDate"]</th>
+            <th>@L["Approve"]</th>
+            <th>@L["Edit"]</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var gm in gms)
+        {
+            <tr>
+                <td>@gm.Name</td>
+                <td>@gm.Email</td>
+                <td>@L[gm.Role]</td>
+                <td>@gm.RegDate.ToString("yy-MM-dd")</td>
+                <td>
+                    <button class="btn btn-primary" data-dismiss="modal" @onclick="async ()=> await OnClickApprove(gm)" disabled="@(gm.Role==AppUser.Role.Admin||gm.Approved==true)">
+                        <span class="oi oi-check"></span>
+                    </button>
+                </td>
+                <td>
+                    <button class="btn btn-primary" data-dismiss="modal" @onclick="()=> OnClickEdit(gm)">
+                        <span class="oi oi-pencil"></span>
+                    </button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (@showDialog)
+{
+    <div class="modal show" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-md" role="document">
+            <div class="modal-content">
+                <EditForm Model="editGM" OnValidSubmit="async ()=>await OnSubmit()">
+                    <FluentValidator />
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">@L["Edit GM"]</h5>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="dlg_username">@L["Username"]</label>
+                            <InputText class="form-control" id="dlg_username" @bind-Value="editGM.Name" readonly />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="dlg_email">@L["EMail"]</label>
+                            <InputText class="form-control" id="dlg_email" @bind-Value="editGM.Email" />
+                            <ValidationMessage For="()=>editGM.Email"></ValidationMessage>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="dlg_userrole">@L["Role"]</label>
+                            <InputSelect class="custom-select" id="dlg_userrole" @bind-Value="editGM.Role" disabled="@(editGM.Role==AppUser.Role.Admin)">
+                                @foreach (var n in AppUser.Role.Names)
+                                {
+                                    @if (editGM.Role != AppUser.Role.Admin && n == AppUser.Role.Admin)
+                                    {
+                                        continue;
+                                    }
+                                    <option>@n</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="()=>editGM.Role"></ValidationMessage>
+                        </div>
+
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary">@L["Update"]</button>
+                        @if (editGM.Role != AppUser.Role.Admin)
+                        {
+                            <button type="button" class="btn btn-secondary" @onclick="OnRemove" @onclick:preventDefault="true">@L["Remove"]</button>
+                        }
+                        <button type="button" class="btn btn-secondary" @onclick="OnCancel" @onclick:preventDefault="true">@L["Cancel"]</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+<style>
+    .modal {
+        display: block;
+        overflow-y: auto;
+    }
+</style>
+
+@code
+{
+    public class GM
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public string Role { get; set; }
+        public string Email { get; set; }
+        public bool Approved { get; set; }
+        public DateTime RegDate { get; set; }
+
+        public static void Copy(GM src, GM dst)
+        {
+            dst.Id = src.Id;
+            dst.Name = src.Name;
+            dst.Role = src.Role;
+            dst.Email = src.Email;
+            dst.Approved = src.Approved;
+            dst.RegDate = src.RegDate;
+        }
+    }
+    public class GMValidator : AbstractValidator<GM>
+    {
+        public GMValidator()
+        {
+            RuleFor(x => x.Role).Must(x => AppUser.Role.Names.Contains(x));
+            RuleFor(x => x.Email).EmailAddress();
+        }
+    }
+    List<GM> gms = new List<GM>();
+
+    bool showDialog = false;
+    GM editGM = new GM();
+
+    protected async override Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        var idmap = AppUser.Role.IdNameMap.Keys.ToList();
+
+        using (var db = new ApplicationDbContext(dbo))
+        {
+            var list = await db.UserRoles.Where(ur => idmap.Contains(ur.RoleId)).ToListAsync();
+            foreach (var r in list)
+            {
+                var user = await db.Users.FindAsync(r.UserId);
+                var extra = await db.Extras.FindAsync(r.UserId);
+                if (user != null && extra != null)
+                {
+                    gms.Add(new GM
+                    {
+                        Id = user.Id,
+                        Name = user.UserName,
+                        Email = user.Email,
+                        Role = AppUser.Role.IdNameMap[r.RoleId],
+                        Approved = user.EmailConfirmed,
+                        RegDate = extra.RegisterTime
+                    });
+                }
+            }
+        }
+    }
+
+    async Task OnClickApprove(GM gm)
+    {
+        using (var db = new ApplicationDbContext(dbo))
+        {
+            var user = await db.Users.FindAsync(gm.Id);
+            if (user == null)
+            {
+                return;
+            }
+
+            user.EmailConfirmed = true;
+
+            await db.SaveChangesAsync();
+        }
+
+        gm.Approved = true;
+        StateHasChanged();
+    }
+
+    void OnClickEdit(GM gm)
+    {
+        GM.Copy(gm, editGM);
+        showDialog = true;
+        StateHasChanged();
+    }
+
+    async Task OnSubmit()
+    {
+        using (var db = new ApplicationDbContext(dbo))
+        {
+            var user = await db.Users.FindAsync(editGM.Id);
+            var userrole = await db.UserRoles.Where(x => x.UserId == editGM.Id).FirstOrDefaultAsync();
+            if (user != null && userrole != null)
+            {
+                user.Email = editGM.Email;
+                db.Users.Update(user);
+                if (userrole.RoleId != AppUser.Role.NameIdMap[editGM.Role])
+                {
+                    db.UserRoles.Remove(userrole);
+                    await db.UserRoles.AddAsync(new IdentityUserRole<string>() { UserId = user.Id, RoleId = AppUser.Role.NameIdMap[editGM.Role] });
+                }
+                await db.SaveChangesAsync();
+            }
+        }
+
+        GM.Copy(editGM, gms.Where(x => x.Id == editGM.Id).FirstOrDefault());
+        showDialog = false;
+        StateHasChanged();
+    }
+    async Task OnRemove()
+    {
+        using (var db = new ApplicationDbContext(dbo))
+        {
+            var user = await db.Users.FindAsync(editGM.Id);
+            if (user != null && user.UserName != AppUser.DefaultAdminUserName)
+            {
+                db.Users.Remove(user);
+                await db.SaveChangesAsync();
+            }
+        }
+
+        gms.RemoveAll(x => x.Id == editGM.Id);
+        showDialog = false;
+        StateHasChanged();
+    }
+    void OnCancel()
+    {
+        showDialog = false;
+        StateHasChanged();
+    }
+}

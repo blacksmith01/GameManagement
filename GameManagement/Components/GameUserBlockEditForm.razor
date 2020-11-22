@@ -1,0 +1,94 @@
+﻿@inject IStringLocalizer<SharedResources> L
+
+<EditForm EditContext="@editContext" OnSubmit="OnSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="modal-header">
+        <h1 class="modal-title">@(isUpdateAction ? L["Edit Block"]: L["Add Block"])</h1>
+    </div>
+    <div class="modal-body">
+
+        <div class="form-group">
+            <label for="block_id">@L["ID"]</label>
+            <InputNumber class="form-control" id="block_id" @bind-Value="Block.id" readonly />
+        </div>
+
+        <div class="form-group">
+            <label for="block_type">@L["Type"]</label>
+            <InputSelect class="form-control" id="block_type" @bind-Value="Block.typeid">
+                @foreach (var b in TableData.blocks)
+                {
+                    if (b.Key != GameUser.Block.TypeID.None)
+                    {
+                        <option value="@b.Key">@L[b.Value.Name]</option>
+                    }
+                }
+            </InputSelect>
+        </div>
+
+        <div class="form-group">
+            <label for="block_starttime">@L["StartTime"]</label>
+            <input class="form-control" type="datetime-local" id="block_starttime" value="@Block.starttime.ToString("yyyy-MM-ddTHH:mm")" @onchange="e=> { Block.starttime = Convert.ToDateTime(e.Value); }" />
+        </div>
+
+        <div class="form-group">
+            <label for="block_endtime">@L["EndTime"]</label>
+            <input class="form-control" type="datetime-local" id="block_endtime" value="@Block.endtime.ToString("yyyy-MM-ddTHH:mm")" @onchange="e=> { Block.endtime = Convert.ToDateTime(e.Value); }" />
+        </div>
+
+        <div class="form-group">
+            <label for="block_comment">@L["Comment"]</label>
+            <InputTextArea class="form-control" row="3" id="block_comment" @bind-Value="Block.comment" />
+        </div>
+
+        <ValidationSummary />
+    </div>
+    <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">@(isUpdateAction ? L["Update"] : L["Add"])</button>
+        @if (isUpdateAction)
+        {
+            <button type="button" class="btn btn-primary" @onclick="OnRemove" data-dismiss="modal">@L["Remove"]</button>
+        }
+        <button type="button" class="btn btn-secondary" @onclick="OnCancel" data-dismiss="modal">@L["Cancel"]</button>
+    </div>
+</EditForm>
+
+@code
+{
+    bool isUpdateAction;
+
+    public EditContext editContext;
+
+    [Parameter]
+    public GameUser.Block Block { get; set; }
+
+    [Parameter]
+    public EventCallback OnCreate { get; set; }
+    [Parameter]
+    public EventCallback OnUpdate { get; set; }
+    [Parameter]
+    public EventCallback OnRemove { get; set; }
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        editContext = new EditContext(Block);
+        isUpdateAction = Block.id != 0;
+    }
+
+    async Task OnSubmit()
+    {
+        if (!editContext.Validate())
+        {
+            return;
+        }
+
+        if (isUpdateAction)
+            await OnUpdate.InvokeAsync(null);
+        else
+            await OnCreate.InvokeAsync(null);
+
+        editContext = new EditContext(Block);
+    }
+}

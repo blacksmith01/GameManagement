@@ -1,0 +1,241 @@
+﻿@page "/notices"
+@inject DbContextOptions<ApplicationDbContext> dbo_app
+@inject DbContextOptions<GameDbContext> dbo_game
+@inject AuthenticationStateProvider asp
+@inject NavigationManager navmgr
+@inject IStringLocalizer<SharedResources> L
+
+<h3>@L["Notice Management"]</h3>
+<br />
+
+<div class="table-responsive">
+
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>@L["ID"]</th>
+                <th>@L["Name"]</th>
+                <th>@L["Type"]</th>
+                <th>@L["Cycle(s)"]</th>
+                <th>@L["Duration(s)"]</th>
+
+                <th>@L["Servers"]</th>
+                <th>@L["StartTime"]</th>
+                <th>@L["EndTime"]</th>
+                <th>@L["Message"]</th>
+                <th>@L["Edit"]</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var elm in Result)
+            {
+                var velm = elm;
+                <tr style="height:50px;@GetTableRowColor(velm)">
+                    <td>@velm.id</td>
+                    <td>@velm.name</td>
+                    <td>@L[velm.typeid.ToString()]</td>
+                    <td>@velm.cycle</td>
+                    <td>@velm.duration</td>
+                    <td>@GetServerNames(velm.servers)</td>
+                    <td>@velm.starttime.ToString("yy-MM-dd HH:mm")</td>
+                    <td>@velm.endtime.ToString("yy-MM-dd HH:mm")</td>
+                    <td style="max-width: 300px; overflow: hidden; text-overflow:ellipsis; white-space:nowrap">@velm.message</td>
+                    <td>
+                        <button class="ex-button-icon" @onclick="async e=> await OnClickEdit(velm.id)">
+                            <span class="oi oi-pencil"></span>
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <hr />
+    <nav aria="Page navigation example">
+        <a class="btn btn-primary justify-content-end" href="#" role="button" @onclick="async e=> await OnClickAdd()" @onclick:preventDefault>@L["Add"]</a>
+        <ul class="pagination justify-content-center">
+            <li class="@(maxPage<=1? "page-item disabled" : "page-item")">
+                <a class="page-link" href="#" @onclick="e=>OnClickPage(e,curPage)" @onclick:preventDefault>&lt;</a>
+            </li>
+            @for (int p = curPageIndex - (curPageIndex % 10), i = p; i < Math.Min(p + 10, maxPage); i++)
+            {
+                var vi = i;
+                <li class=@(vi==curPageIndex? "page-item disabled" : "page-item")>
+                    <a class="page-link" href="#" @onclick="async e=> await OnClickPage(e,vi+1)" @onclick:preventDefault>@(vi + 1)</a>
+                </li>
+            }
+            <li class="@(maxPage<=curPage? "page-item disabled" : "page-item")">
+                <a class="page-link" href="#" @onclick="e=>OnClickPage(e,curPage)" @onclick:preventDefault>&gt;</a>
+            </li>
+        </ul>
+    </nav>
+</div>
+
+@if (@showDialog)
+{
+    <div class="modal show" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-md" role="document">
+            <div class="modal-content">
+                <GameNoticeEditForm Notice="editNotice" Servers="currServers"
+                                    OnCreate="async e=> await CloseDialog(Defines.DialogAction.Create)"
+                                    OnUpdate="async e=> await CloseDialog(Defines.DialogAction.Update)"
+                                    OnRemove="async e=> await CloseDialog(Defines.DialogAction.Remove)"
+                                    OnCancel="async e=> await CloseDialog(Defines.DialogAction.Cancel)" />
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+<style>
+    .modal {
+        display: block;
+        overflow-y: auto;
+    }
+</style>
+
+@code
+{
+    static int ItemCount = 10;
+    int maxPage;
+    int curPage;
+    int curPageIndex { get { return curPage > 0 ? curPage - 1 : 0; } }
+
+    List<GameServer.Notice> Result = new List<GameServer.Notice>();
+
+    GameServer.Notice defaultNotice = new GameServer.Notice();
+    GameServer.Notice editNotice = new GameServer.Notice();
+    IEnumerable<GameServer> currServers = new GameServer[] { };
+    bool showDialog = false;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (var db = new GameDbContext(dbo_game))
+        {
+            currServers = await db.game_servers.ToListAsync();
+        }
+        await Search(0);
+    }
+
+    public async Task OnKeyUpFilter(KeyboardEventArgs e)
+    {
+        if (string.Compare(e.Key, "Enter") == 0)
+        {
+            await Search(0);
+        }
+    }
+
+    async Task OnClickPage(MouseEventArgs e, int page)
+    {
+        await Search(page);
+    }
+
+    async Task OnClickAdd()
+    {
+        DataMapping.Copy(defaultNotice, editNotice);
+        editNotice.starttime = DateTime.Now.RoundToHour();
+        editNotice.endtime = DateTime.Today.AddDays(1);
+        await OpenDialog();
+    }
+
+    async Task OnClickEdit(int noticeid)
+    {
+        var notice = Result.Where(elm => elm.id == noticeid).FirstOrDefault();
+        if (notice == null)
+            return;
+
+        DataMapping.Copy(notice, editNotice);
+        await OpenDialog();
+    }
+
+    string GetTableRowColor(GameServer.Notice notice)
+    {
+        var time = DateTime.Now;
+        if (time < notice.starttime)
+            return "background-color: rgb(233, 236, 239);";
+        else if (time > notice.endtime)
+            return "background-color: rgb(242, 242, 242);";
+        else
+            return "";
+    }
+
+    string GetServerNames(string serverids)
+    {
+        return string.Join(" / ", serverids.Split(',').Select(s => currServers.Where(es => es.id == int.Parse(s)).FirstOrDefault()?.name));
+    }
+
+    async Task OpenDialog()
+    {
+        using (var db = new GameDbContext(dbo_game))
+        {
+            currServers = await db.game_servers.ToListAsync();
+        }
+
+        showDialog = true;
+        StateHasChanged();
+    }
+
+    async Task CloseDialog(Defines.DialogAction action)
+    {
+        if (action != Defines.DialogAction.Cancel)
+        {
+            using (var db = new GameDbContext(dbo_game))
+            {
+                if (action == Defines.DialogAction.Remove)
+                {
+                    db.game_notices.Remove(editNotice);
+                }
+                else
+                {
+                    if (action == Defines.DialogAction.Create)
+                    {
+                        await db.game_notices.AddAsync(editNotice);
+                    }
+                    else
+                    {
+                        db.game_notices.Update(editNotice);
+                    }
+                }
+                await db.SaveChangesAsync();
+            }
+
+            var user = await asp.CurrentUser();
+            using (var db = new ApplicationDbContext(dbo_app))
+            {
+                AppUser.History.Types history_type = AppUser.History.Types.None;
+                switch (action)
+                {
+                    case Defines.DialogAction.Create: history_type = AppUser.History.Types.NoticeCreate; break;
+                    case Defines.DialogAction.Remove: history_type = AppUser.History.Types.NoticeRemove; break;
+                    case Defines.DialogAction.Update: history_type = AppUser.History.Types.NoticeUpdate; break;
+                }
+                await db.AddHistory(user.GetID(), user.Identity.Name, history_type, JsonConvert.SerializeObject(editNotice));
+                var result = await db.SaveChangesAsync();
+            }
+
+            await Search(curPage);
+        }
+
+        showDialog = false;
+    }
+
+    async Task Search(int page)
+    {
+        Result.Clear();
+        curPage = page;
+
+        using (var db = new GameDbContext(dbo_game))
+        {
+            var hcount = await db.game_notices.CountAsync();
+
+            maxPage = hcount / ItemCount + ((hcount % ItemCount) > 0 ? 1 : 0);
+            if (curPage > maxPage)
+                curPage = 0;
+
+            var curPageItemCount = ItemCount * curPageIndex;
+            Result = await db.game_notices.OrderByDescending(elm => elm.id).Skip(curPageItemCount).Take(ItemCount).ToListAsync();
+        }
+
+        StateHasChanged();
+    }
+}
